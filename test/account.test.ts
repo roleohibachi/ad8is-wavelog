@@ -61,6 +61,7 @@ test("panel rendering reads saved summary but does not initiate network or stora
     { label: "Preview station-locations (local)", event: "preview" },
     { label: "Compare with Wavelog (read-only)", event: "compare" },
     { label: "Create missing station-location… (no QSOs)", event: "create" },
+    { label: "Upload QSOs…", event: "upload" },
     { label: "Test connection (read-only)", event: "test-connection" },
   ])
   assert.deepEqual([requests.length, sessions.length, messages.length], [0, 0, 0])
@@ -156,4 +157,21 @@ test("comparison regenerates the local snapshot and refetches stations for the c
   assert.equal(requests.length, 4)
   assert.ok(requests[2].startsWith("https://other.example.org/"))
   assert.equal(sessions.length, 0)
+})
+
+test("queued actions return promptly, reject repeat taps, and never start from render", async () => {
+  const f = fixture()
+  const tasks: (() => Promise<void>)[] = []
+  f.services.schedule = (task) => {
+    tasks.push(task)
+  }
+  const panel = createOperationPanel("test", f.services)
+  await panel.render(args, context)
+  assert.equal(tasks.length, 0)
+  await panel.onEvent!({ ...args, event }, context)
+  await panel.onEvent!({ ...args, event }, context)
+  assert.equal(tasks.length, 1)
+  assert.equal(f.requests.length, 0)
+  await tasks[0]()
+  assert.equal(f.requests.length, 2)
 })

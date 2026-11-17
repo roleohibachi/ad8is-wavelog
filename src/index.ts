@@ -5,6 +5,11 @@ import { createOperationPanel } from "./panel.ts"
 import { createAccount } from "./account.ts"
 
 const services = {
+  schedule: (task: () => Promise<void>) => {
+    host.setTimeout(() => {
+      void task()
+    }, 0)
+  },
   form: (definition: import("@ham2k/extension-sdk").FormDefinition, state?: Record<string, unknown>) => host.showForm(definition, state),
   preview: async (request: import("@ham2k/extension-sdk").ExportRequest) => {
     const results = await hooks.invokeOne("export", "adif", "generateExport", request)

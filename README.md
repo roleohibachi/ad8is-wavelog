@@ -1,20 +1,19 @@
 # AD8IS Wavelog
 
-A Halo / Ham2K PoLo Next extension. **Phase 5 adds reviewed station-location creation**, retaining operation details and the read-only API v2 connection test.
+A Halo / Ham2K PoLo Next extension. **Phase 6 adds reviewed QSO upload**, retaining operation details and the read-only API v2 connection test.
 The panel uses Halo's standard Markdown rendering and theme.
 
-QSO upload is not implemented yet. It follows the human-reviewed phases in
+Manual QSO upload is now implemented, following the human-reviewed phases in
 [PLAN.md](PLAN.md). The existing WaveRover wrapper is
 unaffected.
 
-The operation dashboard panel is the intended final interface. Later milestones
-add Upload and server reconciliation there using existing Halo extension APIs, without
-changes to Halo itself. Optional live upload is a possible later phase, not part
+The operation dashboard panel is the intended interface for preview, comparison,
+creation and upload, using existing Halo extension APIs without changes to Halo. Optional live upload is a possible later phase, not part
 of this release; the panel can then display connection, queue and error status.
 
 ## Install and try
 
-The built file is `dist/ad8is-wavelog-0.1.0-alpha.6.h2kext`. Copy it to your
+The built file is `dist/ad8is-wavelog-0.1.0-alpha.7.h2kext`. Copy it to your
 device using your normal file-transfer workflow. In Halo open **Settings →
 Extensions & Features → Install from file…**, choose it, and enable AD8IS
 Wavelog if needed. In an operation view's layout editor, add the **Wavelog**
@@ -144,6 +143,52 @@ creation after an uncertain result. Creation/linking are separate operations;
 logbook list updates have no atomic append or cross-client uniqueness guarantee.
 Concurrent edits between the last read and PATCH can still race.
 
+## Upload reviewed QSOs
+
+Panel menu → **Upload QSOs…** builds a fresh local snapshot and compares station
+identities again. Every group must have exactly one existing station target.
+For a missing target, use the already-tested Create action, then rerun Upload;
+this milestone deliberately keeps station creation and QSO upload as separate
+reviewed steps. Ambiguous/blocked matches cannot upload.
+
+Review the HTTPS server, group counts and station IDs, then check the explicit
+confirmation box to import. Cancellation or an unchecked box makes no writes.
+After review it rereads the operation/export and station targets: changed
+contact data (including power) or changed target IDs stops before the first
+POST. qso:write plus station:read are sufficient for uploading to existing
+locations; the full six-scope token covers creation/lookup as well. qso:read is
+not required. Source contacts are not marked uploaded or modified in Halo.
+
+Imports use POST /api/v2/qso with ADIF batches of at most 20 contacts and 20,000
+UTF-8 ADIF bytes, sequentially per station. Oversized individual contacts fail
+before confirmation. Exported contact fields and per-QSO power are retained;
+selected station identity fields are normalized consistently with preview,
+including the selected grid precision. Private notes/lookup data remain excluded.
+No activity-specific award submission file or reference-expanding export is used.
+
+The panel shows job progress and a final imported/duplicate/rejected/uncertain/
+unattempted summary. Wavelog supplies aggregate batch counts, not per-contact
+status assignments. Batch contact numbers refer to grouped **upload order**, not
+original chronological log rows. Structured zero-import validation failures are
+classified without displaying raw server messages. Inconsistent counts,
+unstructured errors or lost responses are uncertain; the job stops on a
+rejection or uncertainty and leaves later contacts unattempted. Successful prior
+batches stay imported. No application retry is automatic.
+
+Panel actions start a single tracked task and return promptly, avoiding Halo's
+five-second panel-event timeout while the review dialog or import is running.
+This also applies to Preview, Compare, Test connection and Create. Repeat taps
+are ignored while an action runs. A visible panel refreshes every two seconds
+for progress; rendering never performs API requests or starts jobs.
+
+Keep Halo in the foreground until a result arrives. Closing a panel is not a
+cancel action once import has begun. Mobile background execution is not
+reliable; runtime/app restart loses in-memory job status and never resumes
+uploads automatically. Inspect Wavelog before retrying an interrupted/uncertain
+upload. Re-uploading an unchanged log relies on Wavelog's duplicate detection;
+edits to identifying contact fields may be new contacts, and edits/deletions are
+not synchronized. No exactly-once delivery guarantee or live sync is claimed.
+
 ## Network permission and limits
 
 The install screen asks for `*` network access because each user supplies their
@@ -162,7 +207,9 @@ redirects or inspect the final response URL/headers with this SDK. Its wildcard
 permission still applies to redirect hops; unlike direct requests, their targets
 are chosen by the server. The host's credential-stripping check compares
 hostnames, not ports. Use the canonical trusted HTTPS URL with no API redirects;
-the extension cannot promise strict same-origin redirect refusal. It detects
+the extension cannot promise strict same-origin redirect refusal. A redirected
+POST can also forward its data body even when Authorization is stripped; use a
+trusted canonical API URL that does not redirect. It detects
 HTML/login/challenge responses and reports an actionable error instead of
 displaying the response body. Authentication through a browser's existing SSO
 cookies is not used.

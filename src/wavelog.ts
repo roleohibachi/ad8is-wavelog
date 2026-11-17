@@ -2,11 +2,13 @@ import { STATION_FIELDS } from "./reconcile.ts"
 import type { FetchOptions } from "@ham2k/extension-sdk"
 
 export class WavelogError extends Error {
+  declare readonly duplicateCount?: number
   declare readonly status?: number
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, duplicateCount?: number) {
     super(message)
     Object.defineProperty(this, "name", { value: "WavelogError" })
     Object.defineProperty(this, "status", { value: status })
+    Object.defineProperty(this, "duplicateCount", { value: duplicateCount })
   }
 }
 
@@ -63,7 +65,7 @@ export async function apiRequest(
   method: "GET" | "POST" | "PATCH" = "GET",
   payload?: Record<string, unknown>,
 ): Promise<unknown> {
-  if (!/^(token|station(?:\/[1-9]\d*)?|logbook(?:\/[1-9]\d*)?|lookup\?callsign=[^&]+&detail=basic)$/.test(resource))
+  if (!/^(token|station(?:\/[1-9]\d*)?|logbook(?:\/[1-9]\d*)?|qso|lookup\?callsign=[^&]+&detail=basic)$/.test(resource))
     throw new WavelogError("Unsupported API resource.")
   let response: { status: number; body: string }
   try {
@@ -71,7 +73,7 @@ export async function apiRequest(
       method,
       headers: { Authorization: `Bearer ${credentials.token}`, Accept: "application/json", ...(payload ? { "Content-Type": "application/json" } : {}) },
       ...(payload ? { body: JSON.stringify(payload) } : {}),
-      timeout: 8000,
+      timeout: resource === "qso" ? 15000 : 8000,
     })
   } catch {
     // Transport exceptions can contain request headers or a proxy response.
@@ -90,6 +92,25 @@ export async function apiRequest(
   if (response.status === 403)
     throw new WavelogError("API access was denied (HTTP 403). Check token scopes, station ownership and any reverse-proxy access rules.")
   if (response.status === 404) throw new WavelogError("Wavelog API v2 was not found (HTTP 404). Check the base path and that this server supports API v2.")
+  if (resource === "qso" && response.status === 400) {
+    let failure: unknown
+    try {
+      failure = JSON.parse(response.body)
+    } catch {
+      /* Not a structured API rejection. */
+    }
+    if (record(failure) && record(failure.error) && failure.error.code === "validation_error" && record(failure.error.details)) {
+      const details = failure.error.details
+      if (
+        Array.isArray(details.duplicate) &&
+        Array.isArray(details.critical) &&
+        Array.isArray(details.validation) &&
+        details.critical.length + details.validation.length > 0
+      ) {
+        throw new WavelogError("Wavelog rejected the batch without importing contacts. Raw validation messages are withheld.", 400, details.duplicate.length)
+      }
+    }
+  }
   if (response.status < 200 || response.status >= 300)
     throw new WavelogError(
       `Wavelog API request failed (HTTP ${response.status}).${method === "GET" ? " This read request made no changes." : " The write was not retried; inspect Wavelog before trying again."}`,
@@ -130,7 +151,7 @@ export async function checkConnection(fetch: Transport, input: Record<string, st
 
 export function connectionSummary(result: Connection): string {
   const missing = result.missingUploadScopes
-  return `Connected to Wavelog API v2. ${result.stations.length} station-location(s) readable.${missing.length ? ` Missing scopes for future uploads with lookup enabled: ${missing.join(", ")}.` : " Token has the scopes needed for future uploads with lookup enabled."} Uploads are not enabled in this version.`
+  return `Connected to Wavelog API v2. ${result.stations.length} station-location(s) readable.${missing.length ? ` Missing scopes for the complete create-and-upload workflow with lookup enabled: ${missing.join(", ")}.` : " Token has the scopes needed for future uploads with lookup enabled."} This connection test is read-only; upload is a separate reviewed action.`
 }
 
 export function stationOf(row: unknown): Station {

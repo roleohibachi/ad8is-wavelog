@@ -1,3 +1,4 @@
+import { uploadOperation, uploadSummary } from "./upload.ts"
 import { createLocation } from "./create.ts"
 import { reconcile } from "./reconcile.ts"
 import { previewOperation } from "./preview.ts"
@@ -18,15 +19,17 @@ function text(value: unknown, fallback: string): string {
 
 export function createOperationPanel(version: string, services: Services): PanelHook {
   let testing = false
-  return {
+  let queued = false
+  let jobStatus = ""
+  const panel: PanelHook = {
     async getPanels() {
       return [
         {
           key: "operation",
           title: "Wavelog",
-          description: "Operation details and read-only Wavelog connection test. No uploads yet.",
+          description: "Local preview, station comparison, reviewed creation and manual QSO upload.",
           icon: "file-upload-outline",
-          on: ["operation", "qsoLogged"],
+          on: ["operation", "qsoLogged", "tick:2"],
           initialConfig: { matchFields: "STATION_CALLSIGN,MY_GRIDSQUARE,MY_SOTA_REF,MY_POTA_REF", nameFormat: "", gridPrecision: 6 },
           form: [
             { type: "field", fieldType: "text", key: "matchFields", label: "Match fields" },
@@ -66,6 +69,7 @@ export function createOperationPanel(version: string, services: Services): Panel
         { label: "Preview station-locations (local)", event: "preview" },
         { label: "Compare with Wavelog (read-only)", event: "compare" },
         { label: "Create missing station-location… (no QSOs)", event: "create" },
+        { label: "Upload QSOs…", event: "upload" },
         { label: "Test connection (read-only)", event: "test-connection" },
       ]
       if (typeof operation.uuid !== "string" || operation.uuid.trim() === "") {
@@ -86,7 +90,7 @@ export function createOperationPanel(version: string, services: Services): Panel
           `QSOs: ${qsoCount}`,
           qsoCount === 0 ? "No contacts logged yet." : undefined,
           text(status, "Not connected"),
-          "Phase 5: reviewed station creation. Uploads are not enabled.",
+          jobStatus ? text(jobStatus, "") : "Phase 6: reviewed QSO upload. No automatic uploads.",
         ]
           .filter((line) => line !== undefined)
           .join("\n\n"),
@@ -94,6 +98,27 @@ export function createOperationPanel(version: string, services: Services): Panel
       }
     },
     async onEvent({ event, operation, config }, ctx) {
+      if (event.controlId === "menu" && event.action === "upload" && !testing) {
+        testing = true
+        const label = String(operation.title ?? operation.uuid ?? "operation")
+        try {
+          const result = await uploadOperation(services, operation, config, ctx, (progress) => {
+            jobStatus = `Upload for ${label}: ${progress}`
+          })
+          jobStatus = `Upload for ${label}: imported ${result.imported}, duplicates ${result.duplicates}, rejected ${result.rejected}, uncertain ${result.uncertain}, not attempted ${result.unattempted}.`
+          await services.showMessage({ presentation: "dialog", title: "Wavelog upload results", text: uploadSummary(result) })
+        } catch (error) {
+          jobStatus = `Upload for ${label}: stopped or result display interrupted. Inspect Wavelog before retrying.`
+          await services.showMessage({
+            presentation: "dialog",
+            title: "Upload stopped",
+            text: error instanceof WavelogError ? error.message : "Could not prepare the upload. Inspect Wavelog before another attempt.",
+          })
+        } finally {
+          testing = false
+        }
+        return { values: {} }
+      }
       if (event.controlId === "menu" && event.action === "create" && !testing) {
         testing = true
         try {
@@ -194,4 +219,28 @@ export function createOperationPanel(version: string, services: Services): Panel
       return { values: {} }
     },
   }
+  // Native panel RPCs time out after five seconds, while forms and a batch
+  // import may legitimately take longer. A user action queues ONE tracked task;
+  // rendering and log-change triggers never queue work. No timers resume it.
+  const execute = panel.onEvent!.bind(panel)
+  panel.onEvent = async (args, ctx) => {
+    if (args.event.controlId !== "menu" || !["preview", "compare", "test-connection", "create", "upload"].includes(args.event.action)) return { values: {} }
+    if (queued || testing) return { values: {} }
+    if (!services.schedule) return execute(args, ctx)
+    queued = true
+    const label = String(args.operation.title ?? args.operation.uuid ?? "operation")
+    jobStatus = `${args.event.action} for ${label}: running…`
+    services.schedule(async () => {
+      try {
+        await execute(args, ctx)
+        if (args.event.action !== "upload") jobStatus = `${args.event.action} for ${label}: finished.`
+      } catch {
+        jobStatus = `${args.event.action} for ${label}: interrupted. Inspect Wavelog before retrying any write.`
+      } finally {
+        queued = false
+      }
+    })
+    return { values: {} }
+  }
+  return panel
 }

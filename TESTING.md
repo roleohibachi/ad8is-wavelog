@@ -1,5 +1,58 @@
 # Device acceptance
 
+## Phase 6 — Reviewed QSO upload
+
+- Artifact: `dist/ad8is-wavelog-0.1.0-alpha.7.h2kext`.
+- SDK/tools 1.26.0; manifest API 23; target app v26.11.0 build 193.
+- Phase 5 accepted and committed by human as `9222738`.
+- Verification: 66 tests, typecheck, formatting, build, package validation and
+  archive/permissions/license checks passed. Known official activation-preflight
+  warning remains documented; separate bundle activation tests pass.
+- SHA-256: `2237f90a35f794d14916522a7f742f5071cfa1471e4462f744f909aac9180e07`.
+- Staged in the approved Nextcloud Ham2k PoLo directory; source and destination
+  checksums match.
+- Device import integration: pending. Automated tests use fake transport/forms;
+  no real Wavelog import was executed by the assistant.
+
+### Device checklist
+
+1. Install alpha.7 and keep your existing panel/account. There are no additional
+   permissions. Confirm Preview, Compare and Test connection still work with
+   the queued-task runner and display their eventual result dialog.
+2. Choose a small known operation already imported unchanged into Wavelog. Use
+   Upload QSOs… and cancel or submit with confirmation unchecked. No QSO POST
+   should occur. Compare Wavelog counts before/after as an external check.
+3. Repeat and review the server, count and station IDs, then confirm. For the
+   unchanged known log, expect duplicates rather than new contacts, subject to
+   your Wavelog duplicate configuration. This test reads/writes the actual
+   import endpoint; an unexpected identity difference can produce new contacts,
+   so use a small, well-understood sample and inspect the result.
+4. Choose a new real activation when available. Compare first and use Create
+   missing station-location if necessary. Upload requires every group to have
+   exactly one reviewed existing target; it does not auto-create stations.
+5. Confirm a real upload and leave Halo foregrounded until results arrive.
+   Inspect actual QSOs in Wavelog: target station, callsign, time, band/mode,
+   power, grid and SOTA/POTA attribution. Verify count against the dialog.
+   Re-upload the unmodified operation and check duplicate handling.
+6. If an operation exceeds 20 contacts, check multiple batch results/progress.
+   Split-operation and interrupted-batch behavior have automated coverage when
+   no real test operation is available. Do not deliberately kill the app during
+   a real write just to test uncertainty.
+7. If a real batch is rejected/uncertain, stop and inspect Wavelog before any
+   retry. Prior successful batches remain; later contacts may be unattempted.
+   Batch numbers refer to grouped upload order, not chronological source rows.
+   There is no automatic resume, live mode or contact edit/delete synchronization.
+
+Report cancellation, duplicate and new-import results separately; if no new log
+is available, leave first-import device acceptance pending. Review before making
+an optional signed milestone commit:
+
+```sh
+git add -A
+git diff --cached
+git commit -S -m "feat: upload reviewed QSO groups with aggregate batch outcomes"
+```
+
 ## Phase 5 — Reviewed station creation, no QSO import
 
 - Artifact: `dist/ad8is-wavelog-0.1.0-alpha.6.h2kext`.

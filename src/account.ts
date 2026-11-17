@@ -3,6 +3,7 @@ import { checkConnection, connectionSummary, WavelogError } from "./wavelog.ts"
 import type { Connection, Transport } from "./wavelog.ts"
 
 export type Services = {
+  schedule?: (task: () => Promise<void>) => void
   form?: (definition: import("@ham2k/extension-sdk").FormDefinition, state?: Record<string, unknown>) => Promise<Record<string, unknown> | null>
   preview?: import("./preview.ts").Exporter
   fetch: Transport
@@ -13,7 +14,8 @@ export type Services = {
 export function createAccount(services: Services): AccountHook {
   return {
     label: "Wavelog",
-    description: "Public HTTPS Wavelog API v2. Credentials stay in Halo's account storage. This version only tests access and reads stations.",
+    description:
+      "Public HTTPS Wavelog API v2. Credentials stay in Halo's account storage. Connecting only tests access and reads stations. Creation and upload are separate reviewed actions.",
     synchronizable: false,
     fields: [
       {

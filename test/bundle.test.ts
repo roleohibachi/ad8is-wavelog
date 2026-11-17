@@ -16,6 +16,7 @@ test("built bundle renders without network and performs only explicit account re
   const unexpected = () => assert.fail("Rendering/activation must not call the host or schedule work")
   let allowReads = false
   const requests: string[] = []
+  const timers: (() => unknown)[] = []
   const sessions: unknown[] = []
   const messages: ResultMessage[] = []
   const exportRequests: ExportRequest[] = []
@@ -75,7 +76,13 @@ test("built bundle renders without network and performs only explicit account re
   assert.equal(definition.version, manifest.version)
   await definition.onActivation({
     hostCall,
-    timers: { set: unexpected, clear: unexpected },
+    timers: {
+      set: (callback: () => unknown) => {
+        timers.push(callback)
+        return timers.length
+      },
+      clear: unexpected,
+    },
     registerHook: (category: string, registration: { key: string; hook: PanelHook | AccountHook }) => {
       registrations.push({ category, ...registration })
     },
@@ -132,6 +139,10 @@ test("built bundle renders without network and performs only explicit account re
     { online: false, getQsos: async () => [{ band: "20m", their: { call: "W1AW" } }] },
   )
   assert.equal(requests.length, before)
+  assert.equal(exportRequests.length, 0)
+  assert.equal(timers.length, 1)
+  timers.shift()!()
+  for (let i = 0; i < 100 && !messages.length; i++) await Promise.resolve()
   assert.equal(exportRequests.length, 1)
   assert.equal(exportRequests[0].includePrivateData, false)
   assert.match(messages[0].text, /1 QSOs; 1 station-location/)

@@ -6,8 +6,8 @@ implemented as `0.1.0-alpha.1`, installed by the human and committed as
 connection testing, committed by the human as `f08e700`. Phase 3 local preview
 was accepted and committed by the human as `3e0e95e`. A combined SOTA/POTA
 operation was tested on-device; split-operation device coverage is unavailable
-and remains automated-only. Phase 4 was accepted and committed by the human as `1b8e008`. Phase 5 is
-implemented as `0.1.0-alpha.6`, awaiting its device gate (see TESTING.md). No device installation, publication or commits have been
+and remains automated-only. Phase 4 was accepted and committed by the human as `1b8e008`. Phase 5 was accepted and committed by the human as `9222738`. Phase 6 is
+implemented as `0.1.0-alpha.7`, awaiting its device gate (see TESTING.md). No device installation, publication or commits have been
 performed by the assistant. Work lives under `./dev`.
 
 Phase 1 device feedback: the human installed `0.1.0-alpha.1` successfully and
@@ -317,6 +317,9 @@ Proposed human commit: `feat: create missing activation stations from preview`.
 Add Upload with a final summary of target stations and group counts. Refresh
 the plan if log data, settings, credentials or server state changed since
 preview. Revalidate/create missing stations before uploading their groups.
+First uploader deliberately requires every target to exist: the user creates
+missing locations through the separately reviewed Phase 5 action, then reruns
+Upload. This avoids hiding station mutations inside an import confirmation.
 Use the existing Wavelog API v2 batch/import semantics, conservatively sized
 chunks and sequential requests; map results back to source contacts.
 

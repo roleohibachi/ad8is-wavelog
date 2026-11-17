@@ -4,7 +4,7 @@ import { WavelogError } from "./wavelog.ts"
 type Row = Record<string, JSONValue>
 export type Exporter = (request: ExportRequest) => Promise<string>
 export const MATCH_FIELDS = ["STATION_CALLSIGN", "MY_GRIDSQUARE", "MY_SOTA_REF", "MY_POTA_REF"]
-export type Group = { metadata?: Record<string, string>; values: string[]; count: number; name: string }
+export type Group = { metadata?: Record<string, string>; records?: Record<string, string>[]; values: string[]; count: number; name: string }
 const map = (v: JSONValue | undefined): Row => (v && typeof v === "object" && !Array.isArray(v) ? v : {})
 
 // Resolve each boundary against the BASE operation. Overrides do not accumulate.
@@ -197,6 +197,12 @@ export async function previewOperation(
       const metadataFields = ["MY_DXCC", "MY_CQ_ZONE", "MY_ITU_ZONE"]
       if (!group.count) group.metadata = Object.fromEntries(metadataFields.map((field) => [field, contact[field] ?? ""]))
       else for (const field of Object.keys(group.metadata ?? {})) if (group.metadata![field] !== (contact[field] ?? "")) delete group.metadata![field]
+      const record = { ...contact }
+      for (const field of ["STATION_CALLSIGN", "MY_GRIDSQUARE", "MY_SOTA_REF", "MY_POTA_REF"]) {
+        const index = fields.indexOf(field)
+        if (index >= 0) record[field] = values[index]
+      }
+      ;(group.records ??= []).push(record)
       group.count++
       count++
       groups.set(key, group)

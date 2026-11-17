@@ -41,7 +41,7 @@ test("switching operations renders the new identity and count without stale stat
 test("log-change refresh uses Halo's supplied contact count, including deletion", async () => {
   const panel = createOperationPanel("test", noServices)
   const [descriptor] = await panel.getPanels({}, context)
-  assert.deepEqual(descriptor.on, ["operation", "qsoLogged"])
+  assert.deepEqual(descriptor.on, ["operation", "qsoLogged", "tick:2"])
   for (const count of [0, 1, 2, 1, 0]) {
     const result = await panel.render(args({ uuid: "op-a" }, count), context)
     if (result.kind !== "markdown") assert.fail("Expected Markdown")
