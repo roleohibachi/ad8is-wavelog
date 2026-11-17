@@ -1,12 +1,12 @@
 {
   "key": "ad8is-wavelog",
   "name": "AD8IS Wavelog",
-  "version": "0.1.0-alpha.1",
-  "description": "Operation details for the Wavelog upload workflow (Phase 1 preview).",
+  "version": "0.1.0-alpha.3",
+  "description": "Read-only Wavelog API v2 connection test and operation details. Uploads not yet enabled.",
   "category": "dashboard",
-  "api": 1,
+  "api": 23,
   "icon": "file-upload-outline",
-  "hooks": ["panel"],
+  "hooks": ["panel", "account"],
   "sharedDependencies": {
     "@ham2k/lib-callsigns": "^1.0.0",
     "@ham2k/lib-country-files": "^1.0.0",
@@ -16,5 +16,6 @@
     "@ham2k/lib-operation-data": "^1.0.0",
     "i18next": "^23.0.0",
     "liquidjs": "^10.0.0"
-  }
+  },
+  "domains": ["*"]
 }

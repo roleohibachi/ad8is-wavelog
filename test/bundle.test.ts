@@ -2,9 +2,9 @@ import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import { test } from "node:test"
 import vm from "node:vm"
-import type { HookContext, PanelHook } from "@ham2k/extension-sdk"
+import type { AccountHook, HookContext, PanelHook } from "@ham2k/extension-sdk"
 
-test("built bundle activates and renders through the SDK without host calls", async () => {
+test("built bundle renders without network and performs only explicit account reads through the SDK", async () => {
   const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"))
   const source = await readFile(new URL("../build/index.js", import.meta.url), "utf8")
   const definitions: {
@@ -12,8 +12,28 @@ test("built bundle activates and renders through the SDK without host calls", as
     version: string
     onActivation: (api: unknown) => void | Promise<void>
   }[] = []
-  const registrations: { category: string; key: string; hook: PanelHook }[] = []
-  const unexpected = () => assert.fail("Phase 1 must not call the host or schedule work")
+  const registrations: { category: string; key: string; hook: PanelHook | AccountHook }[] = []
+  const unexpected = () => assert.fail("Rendering/activation must not call the host or schedule work")
+  let allowReads = false
+  const requests: string[] = []
+  const sessions: unknown[] = []
+  const token = "wl2_BUNDLE_TEST_TOKEN"
+  const hostCall = async (method: string, params: Record<string, unknown>) => {
+    if (!allowReads) unexpected()
+    if (method === "fetch") {
+      assert.equal(params.method, "GET")
+      assert.equal((params.headers as Record<string, string>).Authorization, `Bearer ${token}`)
+      const url = String(params.url)
+      requests.push(url)
+      const data = url.endsWith("/token") ? { id: 1, scopes: ["station:read"] } : []
+      return { status: 200, body: JSON.stringify({ data }) }
+    }
+    if (method === "setAccountSession") {
+      sessions.push(params.session)
+      return null
+    }
+    assert.fail(`Unexpected host call: ${method}`)
+  }
   const sandbox = vm.createContext({
     Intl: undefined,
     __halo: {
@@ -31,7 +51,8 @@ test("built bundle activates and renders through the SDK without host calls", as
           },
         },
       ),
-      hostCall: unexpected,
+      hostCall,
+      getAccountKvKey: (key: string) => key,
     },
   })
   vm.runInContext(source, sandbox, { timeout: 2000 })
@@ -40,27 +61,28 @@ test("built bundle activates and renders through the SDK without host calls", as
   assert.equal(definition.key, manifest.key)
   assert.equal(definition.version, manifest.version)
   await definition.onActivation({
-    hostCall: unexpected,
+    hostCall,
     timers: { set: unexpected, clear: unexpected },
-    registerHook: (category: string, registration: { key: string; hook: PanelHook }) => {
+    registerHook: (category: string, registration: { key: string; hook: PanelHook | AccountHook }) => {
       registrations.push({ category, ...registration })
     },
   })
-  assert.equal(registrations.length, 1)
+  assert.equal(registrations.length, 2)
   assert.equal(registrations[0].category, "panel")
   assert.equal(registrations[0].key, manifest.key)
   assert.deepEqual(
     manifest.hooks,
     registrations.map(({ category }) => category),
   )
-  assert.equal(manifest.domains, undefined)
+  assert.deepEqual(manifest.domains, ["*"])
+  assert.equal(manifest.api, 23)
   assert.equal(manifest.webSockets, undefined)
   assert.equal(
     Object.keys(manifest).some((key) => key.startsWith("requires")),
     false,
   )
-  const hook = registrations[0].hook
-  const context = new Proxy({} as HookContext, { get: unexpected })
+  const hook = registrations[0].hook as PanelHook
+  const context = new Proxy({} as HookContext, { get: (_target, key) => (key === "account" ? undefined : unexpected()) })
   const [descriptor] = await hook.getPanels({}, context)
   const content = await hook.render(
     {
@@ -75,4 +97,13 @@ test("built bundle activates and renders through the SDK without host calls", as
   if (content.kind !== "markdown") assert.fail("Expected Markdown")
   assert.match(content.content, /Operation ID: device-test-operation/)
   assert.match(content.content, /QSOs: 25/)
+  assert.equal(requests.length, 0)
+  allowReads = true
+  assert.equal(registrations[1].category, "account")
+  const account = registrations[1].hook as AccountHook
+  const result = await account.testCredentials({ url: "https://log.example.org", token }, { online: true })
+  assert.match(result, /0 station-location/)
+  assert.deepEqual(requests, ["https://log.example.org/api/v2/token", "https://log.example.org/api/v2/station"])
+  assert.equal(sessions.length, 1)
+  assert.ok(!JSON.stringify(sessions).includes(token))
 })
