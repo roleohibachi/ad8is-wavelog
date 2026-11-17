@@ -1,0 +1,7 @@
+node_modules/
+build/
+*.h2kext
+dist/
+.env
+.env.*
+!.env.example

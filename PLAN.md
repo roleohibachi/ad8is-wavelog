@@ -1,7 +1,16 @@
 # Halo Wavelog extension: phased implementation
 
-Status: proposed, ready for human review. No extension code has been generated,
-installed, published, or committed yet. Work lives under `./dev`.
+Status: plan reviewed and initially committed by the human. Phase 1 is
+implemented and packaged as `0.1.0-alpha.1`; the human device-test/review/commit
+gate is pending (see TESTING.md). No installation on the user's device or
+publication has been performed by the assistant. Work lives under `./dev`.
+
+Phase 1 device feedback: the human installed `0.1.0-alpha.1` successfully and
+confirmed the panel is visible in an operation. Remaining checklist items are
+unreported. The human has selected the operation dashboard panel as the final
+UI: this project is an extension only and must not require upstream Halo changes
+or a new export/action hook. See TESTING.md for authorized Nextcloud artifact
+staging.
 
 ## Outcome and scope
 
@@ -19,10 +28,21 @@ Browser builds, continuous sync, bidirectional edits/deletions, private-network
 servers, and HTTP servers are outside the first release.
 
 The extension key will be `ad8is-wavelog`, matching the user's callsign. UI is
-plain and functional, using Halo's standard forms and panels. The main workflow
-is an explicit operation-scoped action: Preview, then Upload. Network writes
+plain and functional, using an operation dashboard panel with standard Halo
+controls/forms for Preview, Upload and results. The panel is the final entry
+point, not a workaround pending upstream changes. Network writes
 must never happen from panel rendering, export-option discovery, or log-save
 hooks. Changing a log should not unexpectedly upload it.
+
+The panel can later show an opt-in live-upload mode, connection/queue status,
+last successful upload and per-contact failures. Keep transport, station matching
+and upload coordination separate from rendering so manual and future live modes
+can share them. Actual live uploads need their own tested queue/reconciliation
+design: logging must not wait for the network, app/runtime restarts must not lose
+track of uncertain outcomes, and mobile background execution is not guaranteed.
+Do not start live uploads simply because a panel renders or becomes visible.
+Live mode remains outside the first release and requires a later human-approved
+phase; do not build its queue or timers speculatively during the manual phases.
 
 ## Workspace and references
 
@@ -46,6 +66,11 @@ demonstrates account credentials and delegating ADIF generation to Halo.
 
 The old `app-polo/src/tools/qsonToWavelog.js` requires one manually configured
 station ID for the entire upload. Do not carry that design forward.
+
+Supplementary station-location references and their deliberate differences from
+our matching rules are recorded in [docs/REFERENCE-NOTES.md](docs/REFERENCE-NOTES.md):
+DB4SCW's station-location article and `mooxle/pota2wavelog`. Carry the listed
+regression cases into the grouping, reconciliation and station-creation phases.
 
 ## Development and device-test loop
 
