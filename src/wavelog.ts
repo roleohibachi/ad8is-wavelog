@@ -2,9 +2,11 @@ import { STATION_FIELDS } from "./reconcile.ts"
 import type { FetchOptions } from "@ham2k/extension-sdk"
 
 export class WavelogError extends Error {
-  constructor(message: string) {
+  declare readonly status?: number
+  constructor(message: string, status?: number) {
     super(message)
     Object.defineProperty(this, "name", { value: "WavelogError" })
+    Object.defineProperty(this, "status", { value: status })
   }
 }
 
@@ -54,16 +56,29 @@ function text(value: unknown): string {
   return typeof value === "string" ? value : ""
 }
 
-async function read(fetch: Transport, credentials: Credentials, resource: "token" | "station"): Promise<unknown> {
+export async function apiRequest(
+  fetch: Transport,
+  credentials: Credentials,
+  resource: string,
+  method: "GET" | "POST" | "PATCH" = "GET",
+  payload?: Record<string, unknown>,
+): Promise<unknown> {
+  if (!/^(token|station(?:\/[1-9]\d*)?|logbook(?:\/[1-9]\d*)?|lookup\?callsign=[^&]+&detail=basic)$/.test(resource))
+    throw new WavelogError("Unsupported API resource.")
   let response: { status: number; body: string }
   try {
     response = await fetch(`${credentials.url}/api/v2/${resource}`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${credentials.token}`, Accept: "application/json" },
+      method,
+      headers: { Authorization: `Bearer ${credentials.token}`, Accept: "application/json", ...(payload ? { "Content-Type": "application/json" } : {}) },
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
       timeout: 8000,
     })
   } catch {
     // Transport exceptions can contain request headers or a proxy response.
+    if (method !== "GET")
+      throw new WavelogError(
+        "Write outcome is uncertain after a connection failure or timeout. The request was not retried. Inspect Wavelog Station Setup and logbook links before trying again.",
+      )
     throw new WavelogError("Connection failed or timed out. Check public HTTPS access, certificate trust, connectivity, and Halo's network permissions.")
   }
   if (/^\s*</.test(response.body))
@@ -76,7 +91,10 @@ async function read(fetch: Transport, credentials: Credentials, resource: "token
     throw new WavelogError("API access was denied (HTTP 403). Check token scopes, station ownership and any reverse-proxy access rules.")
   if (response.status === 404) throw new WavelogError("Wavelog API v2 was not found (HTTP 404). Check the base path and that this server supports API v2.")
   if (response.status < 200 || response.status >= 300)
-    throw new WavelogError(`Wavelog API request failed (HTTP ${response.status}). No station or QSO was changed.`)
+    throw new WavelogError(
+      `Wavelog API request failed (HTTP ${response.status}).${method === "GET" ? " This read request made no changes." : " The write was not retried; inspect Wavelog before trying again."}`,
+      response.status,
+    )
   let envelope: unknown
   try {
     envelope = JSON.parse(response.body)
@@ -91,7 +109,7 @@ async function read(fetch: Transport, credentials: Credentials, resource: "token
 
 export async function checkConnection(fetch: Transport, input: Record<string, string> | undefined): Promise<Connection> {
   const credentials = credentialsOf(input)
-  const token = await read(fetch, credentials, "token")
+  const token = await apiRequest(fetch, credentials, "token")
   if (
     !record(token) ||
     !Number.isInteger(token.id) ||
@@ -104,36 +122,37 @@ export async function checkConnection(fetch: Transport, input: Record<string, st
   const scopes: string[] = token.scopes
   if (!scopes.includes("station:read"))
     throw new WavelogError("Token is missing station:read, required to read station-locations. No station or QSO was changed.")
-  const data = await read(fetch, credentials, "station")
+  const data = await apiRequest(fetch, credentials, "station")
   if (!Array.isArray(data)) throw new WavelogError("Wavelog returned an invalid station list; this is not an empty list.")
-  const stations = data.map((row): Station => {
-    if (!record(row) || !Number.isInteger(row.id) || Number(row.id) <= 0)
-      throw new WavelogError("Wavelog returned an invalid station entry; station access could not be verified.")
-    for (const field of ["name", "callsign", "gridsquare", "sota", "pota"]) {
-      if (row[field] != null && typeof row[field] !== "string") throw new WavelogError("Wavelog returned unsupported station field types.")
-    }
-    const identity: Record<string, string | null> = {}
-    for (const key of Object.values(STATION_FIELDS)) {
-      if (!Object.prototype.hasOwnProperty.call(row, key)) continue
-      const value = row[key]
-      if (value != null && typeof value !== "string" && typeof value !== "number")
-        throw new WavelogError("Wavelog returned unsupported station identity fields.")
-      identity[key] = value == null ? null : String(value)
-    }
-    return {
-      identity,
-      id: Number(row.id),
-      name: text(row.name),
-      callsign: text(row.callsign),
-      grid: text(row.gridsquare),
-      sota: text(row.sota),
-      pota: text(row.pota),
-    }
-  })
+  const stations = data.map(stationOf)
   return { url: credentials.url, stations, missingUploadScopes: UPLOAD_SCOPES.filter((scope) => !scopes.includes(scope)) }
 }
 
 export function connectionSummary(result: Connection): string {
   const missing = result.missingUploadScopes
   return `Connected to Wavelog API v2. ${result.stations.length} station-location(s) readable.${missing.length ? ` Missing scopes for future uploads with lookup enabled: ${missing.join(", ")}.` : " Token has the scopes needed for future uploads with lookup enabled."} Uploads are not enabled in this version.`
+}
+
+export function stationOf(row: unknown): Station {
+  if (!record(row) || !Number.isInteger(row.id) || Number(row.id) <= 0)
+    throw new WavelogError("Wavelog returned an invalid station entry; station access could not be verified.")
+  for (const field of ["name", "callsign", "gridsquare", "sota", "pota"]) {
+    if (row[field] != null && typeof row[field] !== "string") throw new WavelogError("Wavelog returned unsupported station field types.")
+  }
+  const identity: Record<string, string | null> = {}
+  for (const key of Object.values(STATION_FIELDS)) {
+    if (!Object.prototype.hasOwnProperty.call(row, key)) continue
+    const value = row[key]
+    if (value != null && typeof value !== "string" && typeof value !== "number") throw new WavelogError("Wavelog returned unsupported station identity fields.")
+    identity[key] = value == null ? null : String(value)
+  }
+  return {
+    identity,
+    id: Number(row.id),
+    name: text(row.name),
+    callsign: text(row.callsign),
+    grid: text(row.gridsquare),
+    sota: text(row.sota),
+    pota: text(row.pota),
+  }
 }

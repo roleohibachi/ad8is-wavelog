@@ -1,5 +1,58 @@
 # Device acceptance
 
+## Phase 5 — Reviewed station creation, no QSO import
+
+- Artifact: `dist/ad8is-wavelog-0.1.0-alpha.6.h2kext`.
+- SDK/tools 1.26.0; manifest API 23; app target v26.11.0 build 193.
+- Previous milestone: accepted by user and committed as `1b8e008`.
+- Device creation/form integration: pending. Automated tests use a fake transport
+  and fake forms, never a real Wavelog server. No production writes were made by
+  the assistant.
+- Verification: 54 tests, typecheck, formatting, build, package validation and
+  archive/permissions/license checks passed. Known official activation-preflight
+  warning remains documented; separate bundle activation/render tests pass.
+- SHA-256: `18d386faef5d8ac43b4cbe1e2d9805db885a369dd942a7221395680fa79e3bdf`.
+
+### Device checklist
+
+1. Install alpha.6, keeping the existing account and panel. Open a real new
+   activation/combination not already in the readable Wavelog stations, or a
+   controlled test operation of your choosing. Compare first and inspect its
+   identity. All already-matching combinations should cause Create to return
+   without creating anything.
+2. Create missing station-location… (no QSOs) → select a location and optional
+   callsign lookup. Cancel the first form or the final metadata review and
+   confirm no station appeared. This also tests the SDK showForm UI on-device.
+3. Reopen the action. Review DXCC/CQ suggestions, ITU (from the log/fallback or
+   entered manually), name, grid, both references, server and active logbook.
+   Submit once without checking confirmation: again, no write should occur.
+4. When satisfied, reopen and check the explicit creation confirmation before
+   submitting. This step intentionally creates a real empty station-location
+   and links it to your existing active logbook. No QSO import occurs.
+5. Inspect Wavelog Station Setup and logbook membership. Verify the returned
+   station ID, callsign, grid, SOTA/POTA combination and required zones. Check
+   pre-existing station links are still present and QSO count is unchanged.
+6. Rerun Compare/Create on the same activation. Expect reuse/no new station;
+   no duplicate station or additional logbook should appear.
+7. Optionally disable callsign lookup or try its missing-scope case: metadata
+   should remain manually enterable. Test network-error/uncertain-write cases
+   only with the automated tests rather than deliberately interrupting a real
+   write. If a real write fails, inspect Station Setup and links before retrying;
+   a station may exist even when the response was lost. No automatic cleanup.
+
+Report the result of forms, cancellation and one confirmed creation/reuse when
+available. If no new location is available, report cancellation/UI checks and
+leave real creation acceptance pending. Use the existing workflow for actual
+QSO imports until the upload milestone is implemented.
+
+After review/device success, make your own milestone commit:
+
+```sh
+git add -A
+git diff --cached
+git commit -S -m "feat: create reviewed station-locations and link the active logbook"
+```
+
 ## Phase 4 — Read-only comparison and automatic names
 
 - Artifact: `dist/ad8is-wavelog-0.1.0-alpha.5.h2kext`.

@@ -6,8 +6,8 @@ implemented as `0.1.0-alpha.1`, installed by the human and committed as
 connection testing, committed by the human as `f08e700`. Phase 3 local preview
 was accepted and committed by the human as `3e0e95e`. A combined SOTA/POTA
 operation was tested on-device; split-operation device coverage is unavailable
-and remains automated-only. Phase 4 is implemented as `0.1.0-alpha.5`, awaiting
-its device gate (see TESTING.md). No device installation, publication or commits have been
+and remains automated-only. Phase 4 was accepted and committed by the human as `1b8e008`. Phase 5 is
+implemented as `0.1.0-alpha.6`, awaiting its device gate (see TESTING.md). No device installation, publication or commits have been
 performed by the assistant. Work lives under `./dev`.
 
 Phase 1 device feedback: the human installed `0.1.0-alpha.1` successfully and

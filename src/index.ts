@@ -5,6 +5,7 @@ import { createOperationPanel } from "./panel.ts"
 import { createAccount } from "./account.ts"
 
 const services = {
+  form: (definition: import("@ham2k/extension-sdk").FormDefinition, state?: Record<string, unknown>) => host.showForm(definition, state),
   preview: async (request: import("@ham2k/extension-sdk").ExportRequest) => {
     const results = await hooks.invokeOne("export", "adif", "generateExport", request)
     const result = results.find((entry) => entry.ok)?.value as { content?: unknown } | undefined

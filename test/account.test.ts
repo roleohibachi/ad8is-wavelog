@@ -60,6 +60,7 @@ test("panel rendering reads saved summary but does not initiate network or stora
     { label: "Preview settings", settings: true },
     { label: "Preview station-locations (local)", event: "preview" },
     { label: "Compare with Wavelog (read-only)", event: "compare" },
+    { label: "Create missing station-location… (no QSOs)", event: "create" },
     { label: "Test connection (read-only)", event: "test-connection" },
   ])
   assert.deepEqual([requests.length, sessions.length, messages.length], [0, 0, 0])

@@ -1,9 +1,10 @@
+import { createLocation } from "./create.ts"
 import { reconcile } from "./reconcile.ts"
 import { previewOperation } from "./preview.ts"
 import type { PanelHook } from "@ham2k/extension-sdk"
 import type { Services } from "./account.ts"
 import { saveConnection } from "./account.ts"
-import { checkConnection, connectionSummary, credentialsOf } from "./wavelog.ts"
+import { checkConnection, connectionSummary, credentialsOf, WavelogError } from "./wavelog.ts"
 
 // Operation data is text, never Markdown supplied by the operator. Escape it
 // so a title cannot introduce a link, remote image, or extra document structure.
@@ -29,6 +30,7 @@ export function createOperationPanel(version: string, services: Services): Panel
           initialConfig: { matchFields: "STATION_CALLSIGN,MY_GRIDSQUARE,MY_SOTA_REF,MY_POTA_REF", nameFormat: "", gridPrecision: 6 },
           form: [
             { type: "field", fieldType: "text", key: "matchFields", label: "Match fields" },
+            { type: "field", fieldType: "number", key: "ituFallback", label: "Fallback ITU zone for new stations (optional, 1–90)" },
             { type: "field", fieldType: "text", key: "nameFormat", label: "Location name format (blank = SOTA, POTA, grid)" },
             {
               type: "field",
@@ -63,6 +65,7 @@ export function createOperationPanel(version: string, services: Services): Panel
         { label: "Preview settings", settings: true as const },
         { label: "Preview station-locations (local)", event: "preview" },
         { label: "Compare with Wavelog (read-only)", event: "compare" },
+        { label: "Create missing station-location… (no QSOs)", event: "create" },
         { label: "Test connection (read-only)", event: "test-connection" },
       ]
       if (typeof operation.uuid !== "string" || operation.uuid.trim() === "") {
@@ -83,7 +86,7 @@ export function createOperationPanel(version: string, services: Services): Panel
           `QSOs: ${qsoCount}`,
           qsoCount === 0 ? "No contacts logged yet." : undefined,
           text(status, "Not connected"),
-          "Phase 4: local preview and read-only station comparison. Uploads are not enabled.",
+          "Phase 5: reviewed station creation. Uploads are not enabled.",
         ]
           .filter((line) => line !== undefined)
           .join("\n\n"),
@@ -91,6 +94,25 @@ export function createOperationPanel(version: string, services: Services): Panel
       }
     },
     async onEvent({ event, operation, config }, ctx) {
+      if (event.controlId === "menu" && event.action === "create" && !testing) {
+        testing = true
+        try {
+          const message = await createLocation(services, operation, config, ctx)
+          await services.showMessage({ presentation: "dialog", title: "Station-location creation", text: message })
+        } catch (error) {
+          await services.showMessage({
+            presentation: "dialog",
+            title: "Station creation stopped",
+            text:
+              error instanceof WavelogError
+                ? error.message
+                : "Could not complete station creation. Inspect Wavelog Station Setup and logbook links before trying again. No QSOs imported.",
+          })
+        } finally {
+          testing = false
+        }
+        return { values: {} }
+      }
       if (event.controlId === "menu" && ["preview", "compare"].includes(event.action) && !testing) {
         testing = true
         try {

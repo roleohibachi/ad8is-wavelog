@@ -1,10 +1,10 @@
 # AD8IS Wavelog
 
-A Halo / Ham2K PoLo Next extension. **Phase 4 adds read-only station reconciliation**, retaining operation details and the read-only API v2 connection test.
+A Halo / Ham2K PoLo Next extension. **Phase 5 adds reviewed station-location creation**, retaining operation details and the read-only API v2 connection test.
 The panel uses Halo's standard Markdown rendering and theme.
 
-There is no station-location creation or QSO upload yet. Those follow the
-human-reviewed phases in [PLAN.md](PLAN.md). The existing WaveRover wrapper is
+QSO upload is not implemented yet. It follows the human-reviewed phases in
+[PLAN.md](PLAN.md). The existing WaveRover wrapper is
 unaffected.
 
 The operation dashboard panel is the intended final interface. Later milestones
@@ -14,7 +14,7 @@ of this release; the panel can then display connection, queue and error status.
 
 ## Install and try
 
-The built file is `dist/ad8is-wavelog-0.1.0-alpha.5.h2kext`. Copy it to your
+The built file is `dist/ad8is-wavelog-0.1.0-alpha.6.h2kext`. Copy it to your
 device using your normal file-transfer workflow. In Halo open **Settings →
 Extensions & Features → Install from file…**, choose it, and enable AD8IS
 Wavelog if needed. In an operation view's layout editor, add the **Wavelog**
@@ -103,6 +103,46 @@ Results are not cached or saved as an upload plan. Re-running always regenerates
 the operation preview and refetches stations, including after changing accounts,
 settings or logs. Results show at most 50 groups. Choosing a target for an
 ambiguous group will be part of the later reviewed creation/upload workflow.
+
+## Create missing station-locations (no QSO import)
+
+Panel menu → **Create missing station-location… (no QSOs)** creates one reviewed
+location at a time. It first regenerates preview/reconciliation. Select a new
+combination and whether to use callsign lookup for missing DXCC/CQ values, then
+review the proposed name, fixed identity, server and active logbook. Fill the
+required DXCC number, CQ zone and ITU zone. Uniform MY_DXCC/MY_CQ_ZONE/MY_ITU_ZONE
+values from the exported contacts prefill the form; lookup fills missing values
+only. Lookup suggestions require review against the actual operating location,
+especially for entities spanning zones. ITU is never invented by callsign lookup.
+Preview settings has an optional fallback ITU zone for new stations.
+
+Nothing is created unless you submit the final form with its explicit creation
+checkbox checked. Cancellation or an unchecked checkbox makes no writes. Identity
+fields are fixed by preview; editing required metadata that is itself a selected
+match field requires correcting the source/settings and previewing again.
+The source operation and current station list are reread after review, before
+creation. Ambiguous/unsupported identities are not created automatically.
+
+Required scopes are station:read, station:write, logbook:read and logbook:write.
+lookup:read is optional: without it or after lookup failure, fill metadata
+manually. qso:write is not needed until the upload milestone. There must be one
+existing active logbook; the extension does not create or select a logbook.
+
+After POST /api/v2/station, it checks the returned identity, rereads the active
+logbook's station_ids and PATCHes the list with the new ID appended. Previously
+linked IDs are preserved. New stations have Club Log upload, eQSL nickname and
+PSKReporter live reporting disabled; external-service credentials are not copied.
+No fixed station power is sent. No QSO endpoint is called.
+
+Writes are not retried automatically. After a timeout, malformed write response
+or linking failure, inspect Station Setup and logbook membership before another
+attempt. A partial-success message includes the station ID when known. The next
+attempt reconciles visible stations again, and a 409 conflict is resolved only
+when one exact visible match is found. An unlinked newly created station may be
+hidden by the server's active-logbook-only preference, so do not blindly repeat
+creation after an uncertain result. Creation/linking are separate operations;
+logbook list updates have no atomic append or cross-client uniqueness guarantee.
+Concurrent edits between the last read and PATCH can still race.
 
 ## Network permission and limits
 
