@@ -50,7 +50,7 @@ export function normalizeServer(input: string): string {
 export function credentialsOf(input: Record<string, string> | undefined): Credentials {
   const url = normalizeServer(input?.url ?? "")
   const token = (input?.token ?? "").trim()
-  if (!/^wl2_[A-Za-z0-9_-]+$/.test(token)) throw new WavelogError("Enter a Wavelog API v2 token beginning wl2_. Legacy keys are planned for a later milestone.")
+  if (!/^wl2_[A-Za-z0-9_-]+$/.test(token)) throw new WavelogError("Enter a Wavelog API v2 token beginning wl2_. Legacy API keys are not supported.")
   return { url, token }
 }
 
@@ -151,7 +151,7 @@ export async function checkConnection(fetch: Transport, input: Record<string, st
 
 export function connectionSummary(result: Connection): string {
   const missing = result.missingUploadScopes
-  return `Connected to Wavelog API v2. ${result.stations.length} station-location(s) readable.${missing.length ? ` Missing scopes for the complete create-and-upload workflow with lookup enabled: ${missing.join(", ")}.` : " Token has the scopes needed for future uploads with lookup enabled."} This connection test is read-only; upload is a separate reviewed action.`
+  return `Connected to Wavelog API v2. ${result.stations.length} station-location(s) readable.${missing.length ? ` Missing scopes for the complete create-and-upload workflow with lookup enabled: ${missing.join(", ")}.` : " Token has the scopes needed for creation and upload with lookup enabled."} This connection test is read-only; upload is a separate reviewed action.`
 }
 
 export function stationOf(row: unknown): Station {

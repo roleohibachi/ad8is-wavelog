@@ -90,7 +90,7 @@ export function createOperationPanel(version: string, services: Services): Panel
           `QSOs: ${qsoCount}`,
           qsoCount === 0 ? "No contacts logged yet." : undefined,
           text(status, "Not connected"),
-          jobStatus ? text(jobStatus, "") : "Phase 6: reviewed QSO upload. No automatic uploads.",
+          jobStatus ? text(jobStatus, "") : "Manual, reviewed uploads. No automatic uploads.",
         ]
           .filter((line) => line !== undefined)
           .join("\n\n"),
@@ -101,13 +101,19 @@ export function createOperationPanel(version: string, services: Services): Panel
       if (event.controlId === "menu" && event.action === "upload" && !testing) {
         testing = true
         const label = String(operation.title ?? operation.uuid ?? "operation")
+        let completed = false
         try {
           const result = await uploadOperation(services, operation, config, ctx, (progress) => {
             jobStatus = `Upload for ${label}: ${progress}`
           })
-          jobStatus = `Upload for ${label}: imported ${result.imported}, duplicates ${result.duplicates}, rejected ${result.rejected}, uncertain ${result.uncertain}, not attempted ${result.unattempted}.`
+          jobStatus = `Upload for ${label}: ${result.cancelled ? "cancelled; " : ""}imported ${result.imported}, duplicates ${result.duplicates}, rejected ${result.rejected}, uncertain ${result.uncertain}, not attempted ${result.unattempted}.`
+          completed = true
           await services.showMessage({ presentation: "dialog", title: "Wavelog upload results", text: uploadSummary(result) })
         } catch (error) {
+          if (completed) {
+            jobStatus += " Result dialog unavailable; counts remain above."
+            return { values: {} }
+          }
           jobStatus = `Upload for ${label}: stopped or result display interrupted. Inspect Wavelog before retrying.`
           await services.showMessage({
             presentation: "dialog",
@@ -230,16 +236,21 @@ export function createOperationPanel(version: string, services: Services): Panel
     queued = true
     const label = String(args.operation.title ?? args.operation.uuid ?? "operation")
     jobStatus = `${args.event.action} for ${label}: running…`
-    services.schedule(async () => {
-      try {
-        await execute(args, ctx)
-        if (args.event.action !== "upload") jobStatus = `${args.event.action} for ${label}: finished.`
-      } catch {
-        jobStatus = `${args.event.action} for ${label}: interrupted. Inspect Wavelog before retrying any write.`
-      } finally {
-        queued = false
-      }
-    })
+    try {
+      services.schedule(async () => {
+        try {
+          await execute(args, ctx)
+          if (args.event.action !== "upload") jobStatus = `${args.event.action} for ${label}: finished.`
+        } catch {
+          jobStatus = `${args.event.action} for ${label}: interrupted. Inspect Wavelog before retrying any write.`
+        } finally {
+          queued = false
+        }
+      })
+    } catch {
+      queued = false
+      jobStatus = `${args.event.action} for ${label}: could not start the task. No action was started; try again.`
+    }
     return { values: {} }
   }
   return panel

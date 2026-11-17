@@ -1,11 +1,13 @@
 # AD8IS Wavelog
 
-A Halo / Ham2K PoLo Next extension. **Phase 6 adds reviewed QSO upload**, retaining operation details and the read-only API v2 connection test.
+A Halo / Ham2K PoLo Next extension that uploads operation QSOs to the matching
+Wavelog station-locations. Preview, compare, create missing locations, then
+review and upload.
 The panel uses Halo's standard Markdown rendering and theme.
 
-Manual QSO upload is now implemented, following the human-reviewed phases in
-[PLAN.md](PLAN.md). The existing WaveRover wrapper is
-unaffected.
+The manual workflow has been tested on-device through the human-reviewed
+phases in [PLAN.md](PLAN.md). This release supports API v2 tokens only.
+The existing WaveRover wrapper is unaffected.
 
 The operation dashboard panel is the intended interface for preview, comparison,
 creation and upload, using existing Halo extension APIs without changes to Halo. Optional live upload is a possible later phase, not part
@@ -13,7 +15,7 @@ of this release; the panel can then display connection, queue and error status.
 
 ## Install and try
 
-The built file is `dist/ad8is-wavelog-0.1.0-alpha.7.h2kext`. Copy it to your
+The built file is `dist/ad8is-wavelog-0.1.0-alpha.8.h2kext`. Copy it to your
 device using your normal file-transfer workflow. In Halo open **Settings →
 Extensions & Features → Install from file…**, choose it, and enable AD8IS
 Wavelog if needed. In an operation view's layout editor, add the **Wavelog**
@@ -36,12 +38,17 @@ last-successful-test summary; that is historical, not a live connectivity check.
 Panel rendering never makes requests. Reopen/refresh the panel after changing
 the account if it still shows the previous render.
 
-`station:read` is sufficient for this milestone. The result also reports missing
-permissions for later uploads with lookup enabled: `station:write`, `qso:write`,
-`logbook:read`, `logbook:write`, and `lookup:read`. Missing those write/lookup
-scopes does not prevent a successful read-only test. They are inspected as token
-metadata; no write requests are made to test them. Legacy keys are not supported
-in this milestone.
+For one token covering the entire workflow, enable all six scopes:
+
+```text
+station:read station:write logbook:read logbook:write lookup:read qso:write
+```
+
+This matches WaveRover's API v2 requirements with lookup enabled. `qso:read`,
+delete and admin scopes are not needed. A read-only connection test needs only
+`station:read`; upload to existing locations adds `qso:write`. The connection
+test reports missing scopes from token metadata without attempting writes.
+Legacy API keys are not supported.
 
 ## Local station-location preview
 
@@ -69,8 +76,8 @@ blank expanded result uses automatic naming: available SOTA refs, POTA refs, the
 grid joined with comma-space. Dates and callsigns are omitted from the automatic
 name but callsign remains part of matching identity. Examples: `W8O/SE-004,
 US-5450, EM89AB`, `US-5450, EM89AB`, or `EM89AB`. Existing panel settings retain
-their saved templates; clear Location name format once to adopt this new default. Settings for lookup/ITU fallback
-will arrive with station creation, where they have an effect.
+their saved templates; clear Location name format once to adopt this new default. Callsign lookup is chosen in the creation form; Preview settings also includes
+an optional fallback ITU zone for new stations.
 
 The preview explicitly excludes private notes and lookup-derived data and caps
 grid precision at six characters. It does not silently inherit a user's private
@@ -100,8 +107,9 @@ no match in that visible list, not proof that no hidden location exists.
 
 Results are not cached or saved as an upload plan. Re-running always regenerates
 the operation preview and refetches stations, including after changing accounts,
-settings or logs. Results show at most 50 groups. Choosing a target for an
-ambiguous group will be part of the later reviewed creation/upload workflow.
+settings or logs. Results show at most 50 groups. Ambiguous groups block creation/upload. Resolve duplicate station profiles in
+Wavelog or choose more specific match fields, then compare again; this release
+does not provide a manual target override.
 
 ## Create missing station-locations (no QSO import)
 
@@ -124,7 +132,7 @@ creation. Ambiguous/unsupported identities are not created automatically.
 
 Required scopes are station:read, station:write, logbook:read and logbook:write.
 lookup:read is optional: without it or after lookup failure, fill metadata
-manually. qso:write is not needed until the upload milestone. There must be one
+manually. qso:write is not needed for station creation. There must be one
 existing active logbook; the extension does not create or select a logbook.
 
 After POST /api/v2/station, it checks the returned identity, rereads the active
@@ -148,7 +156,7 @@ Concurrent edits between the last read and PATCH can still race.
 Panel menu → **Upload QSOs…** builds a fresh local snapshot and compares station
 identities again. Every group must have exactly one existing station target.
 For a missing target, use the already-tested Create action, then rerun Upload;
-this milestone deliberately keeps station creation and QSO upload as separate
+this release keeps station creation and QSO upload as separate
 reviewed steps. Ambiguous/blocked matches cannot upload.
 
 Review the HTTPS server, group counts and station IDs, then check the explicit
@@ -179,7 +187,10 @@ Panel actions start a single tracked task and return promptly, avoiding Halo's
 five-second panel-event timeout while the review dialog or import is running.
 This also applies to Preview, Compare, Test connection and Create. Repeat taps
 are ignored while an action runs. A visible panel refreshes every two seconds
-for progress; rendering never performs API requests or starts jobs.
+for progress; rendering never performs API requests or starts jobs. If the host
+cannot start a task, the panel reports that no action started and permits another
+explicit attempt. If the final results dialog fails to open, the panel retains
+the aggregate counts for the completed run.
 
 Keep Halo in the foreground until a result arrives. Closing a panel is not a
 cancel action once import has begun. Mobile background execution is not
@@ -193,7 +204,8 @@ not synchronized. No exactly-once delivery guarantee or live sync is claimed.
 
 The install screen asks for `*` network access because each user supplies their
 own Wavelog hostname. Extension-generated URLs are restricted to the configured
-base plus the two API paths above. It does not call a relay or companion server.
+base plus the API v2 resources documented above (token, station, logbook,
+lookup and qso). It does not call a relay or companion server.
 URL validation rejects embedded credentials, queries, fragments, HTTP, IP-literal
 addresses and local-name spellings. Use an ASCII public DNS hostname (punycode
 for international names). Halo also blocks wildcard access to private addresses,
@@ -214,9 +226,13 @@ HTML/login/challenge responses and reports an actionable error instead of
 displaying the response body. Authentication through a browser's existing SSO
 cookies is not used.
 
-Follow [TESTING.md](TESTING.md) before advancing to Phase 2. Current device
-target is November '26 BETA v26.11.0 build 193; actual device acceptance is
-pending. Installing an updated file under the same key updates the extension.
+Device testing through alpha.7 was reported working on November '26 BETA
+v26.11.0 build 193. The device OS has not been recorded; other platforms and
+individual edge cases are not implied to be verified. Installing an updated
+file under the same key updates the extension. After an upgrade, check that
+the account and panel settings remain, then run Test connection and Preview.
+See [TESTING.md](TESTING.md) for the results matrix and current device gate, and
+[RELEASE.md](RELEASE.md) for release notes and a draft contribution description.
 
 ## Build
 
@@ -249,7 +265,7 @@ initialization; this is not a test of country/mode data or the device's QuickJS
 runtime. The on-device checklist remains the acceptance gate.
 
 `sharp`, an optional screenshot-publishing dependency of the pinned tools, is
-overridden to a patched release (`^0.35.5`). This milestone neither publishes
+overridden to a patched release (`^0.35.5`). This project neither publishes
 screenshots nor uses it at runtime. The lockfile records the resolved version.
 
 Source lives in `src/`; tests in `test/`; generated output in `build/` and

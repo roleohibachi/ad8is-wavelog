@@ -1,5 +1,62 @@
 # Device acceptance
 
+## Phase 7 — API v2 release preparation
+
+- Artifact: `dist/ad8is-wavelog-0.1.0-alpha.8.h2kext`.
+- SDK/tools 1.26.0; manifest API 23; target app v26.11.0 build 193.
+- Human decision: API v2 only for this release; legacy support deferred.
+- Verification: 70 tests, typecheck, formatting, build and package checks pass.
+  Archive integrity, manifest hooks/permissions, license asset and bundle contents
+  verified. The documented host-library activation-preflight warning remains;
+  the separate bundled-SDK activation test passes.
+- SHA-256: `3c76eea6fdde2a35828452cc328f617bff939a77e18618ed55f50866e4ee0533`.
+- Staged in the approved Nextcloud Ham2k PoLo directory; source and destination
+  checksums match.
+- Device upgrade verification: pending. No live imports or commits performed
+  by the assistant. Release notes and draft contribution text: RELEASE.md.
+
+### Device checklist
+
+1. Install alpha.8 over alpha.7 from file. Keep the existing account and panel;
+   confirm the URL, token, custom name format and other panel settings remain.
+2. Run Test connection, Preview and Compare on a known operation. They should
+   behave as before. A cancelled Upload now explicitly says cancelled in the
+   panel status, with zero imported; it still makes no QSO POST.
+3. If useful, confirm a duplicate-only upload of a small, unchanged known log
+   under your normal Wavelog duplicate configuration. Inspect its counts and
+   target station. A new activation is not required for this upgrade check.
+4. Restart Halo and confirm account/panel restoration. Test local Preview
+   offline, then reconnect and test the connection. No action should restart
+   or upload on its own. Status from the previous runtime is not retained.
+5. Task-launch and results-dialog failure paths have synthetic coverage; no
+   need to induce host failures or interrupt a real upload on the device.
+
+### Reported results matrix
+
+These are the human's reported milestone outcomes, not a claim that every
+historical checklist item was exercised. Device OS and exact sample sizes are
+unrecorded. App target is November '26 BETA v26.11.0 build 193.
+
+| Artifact | Human outcome                                            | Human commit |
+| -------- | -------------------------------------------------------- | ------------ |
+| alpha.1  | Installed; dashboard panel visible                       | `410b290`    |
+| alpha.3  | Connection milestone reported good                       | `f08e700`    |
+| alpha.4  | Preview accepted; combined SOTA/POTA operation available | `3e0e95e`    |
+| alpha.5  | Station reconciliation reported working                  | `1b8e008`    |
+| alpha.6  | Station creation reported working                        | `9222738`    |
+| alpha.7  | Upload reported working; Cancel also exercised           | `80d8c9a`    |
+| alpha.8  | Awaiting upgrade/device check                            | pending      |
+
+Split/BREAK operations, batch interruption/partial outcomes, 1,000-contact
+imports and host task/dialog failures have synthetic coverage. Real-device
+results for those individual cases, other device OSes and browser/CORS are
+unverified. The alpha.7 Cancel observation triggered Bitwarden autofill: source
+inspection found only Markdown and a confirmation checkbox in our form, wrapped
+by Halo's native AutofillGroup. The suspected host/autofill interaction is not
+confirmed or fixed here; no transient token/login field is opened by Upload.
+
+After device review, follow the human commit/publication gate in RELEASE.md.
+
 ## Phase 6 — Reviewed QSO upload
 
 - Artifact: `dist/ad8is-wavelog-0.1.0-alpha.7.h2kext`.
@@ -11,8 +68,9 @@
 - SHA-256: `2237f90a35f794d14916522a7f742f5071cfa1471e4462f744f909aac9180e07`.
 - Staged in the approved Nextcloud Ham2k PoLo directory; source and destination
   checksums match.
-- Device import integration: pending. Automated tests use fake transport/forms;
-  no real Wavelog import was executed by the assistant.
+- Device import integration: human reported working and committed as `80d8c9a`.
+  Individual import/duplicate totals were not supplied. Automated tests use fake
+  transport/forms; no real Wavelog import was executed by the assistant.
 
 ### Device checklist
 
@@ -58,9 +116,9 @@ git commit -S -m "feat: upload reviewed QSO groups with aggregate batch outcomes
 - Artifact: `dist/ad8is-wavelog-0.1.0-alpha.6.h2kext`.
 - SDK/tools 1.26.0; manifest API 23; app target v26.11.0 build 193.
 - Previous milestone: accepted by user and committed as `1b8e008`.
-- Device creation/form integration: pending. Automated tests use a fake transport
-  and fake forms, never a real Wavelog server. No production writes were made by
-  the assistant.
+- Device creation/form integration: human reported working and committed as
+  `9222738`. Automated tests use a fake transport and fake forms, never a real
+  Wavelog server. No production writes were made by the assistant.
 - Verification: 54 tests, typecheck, formatting, build, package validation and
   archive/permissions/license checks passed. Known official activation-preflight
   warning remains documented; separate bundle activation/render tests pass.

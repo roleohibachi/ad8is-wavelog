@@ -175,3 +175,25 @@ test("queued actions return promptly, reject repeat taps, and never start from r
   await tasks[0]()
   assert.equal(f.requests.length, 2)
 })
+
+test("a failed task launch releases the panel for the next explicit action", async () => {
+  const f = fixture()
+  const tasks: (() => Promise<void>)[] = []
+  f.services.schedule = () => {
+    throw new Error(token)
+  }
+  const panel = createOperationPanel("test", f.services)
+  await panel.onEvent!({ ...args, event }, context)
+  assert.equal(f.requests.length, 0)
+  const content = await panel.render(args, context)
+  if (content.kind !== "markdown") assert.fail("Expected Markdown")
+  assert.match(content.content, /could not start/)
+  assert.ok(!content.content.includes(token))
+  f.services.schedule = (task) => {
+    tasks.push(task)
+  }
+  await panel.onEvent!({ ...args, event }, context)
+  assert.equal(tasks.length, 1)
+  await tasks[0]()
+  assert.equal(f.requests.length, 2)
+})

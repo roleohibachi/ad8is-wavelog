@@ -6,8 +6,10 @@ implemented as `0.1.0-alpha.1`, installed by the human and committed as
 connection testing, committed by the human as `f08e700`. Phase 3 local preview
 was accepted and committed by the human as `3e0e95e`. A combined SOTA/POTA
 operation was tested on-device; split-operation device coverage is unavailable
-and remains automated-only. Phase 4 was accepted and committed by the human as `1b8e008`. Phase 5 was accepted and committed by the human as `9222738`. Phase 6 is
-implemented as `0.1.0-alpha.7`, awaiting its device gate (see TESTING.md). No device installation, publication or commits have been
+and remains automated-only. Phase 4 was accepted and committed by the human as `1b8e008`. Phase 5 was accepted and committed by the human as `9222738`. Phase 6 (`0.1.0-alpha.7`) was reported working and committed by the human as
+`80d8c9a`. Phase 7 release preparation is implemented as `0.1.0-alpha.8`, pending
+upgrade verification. The human explicitly chose API v2 only for this release;
+legacy support is deferred. See TESTING.md and RELEASE.md. No device installation, publication or commits have been
 performed by the assistant. Work lives under `./dev`.
 
 Phase 1 device feedback: the human installed `0.1.0-alpha.1` successfully and
@@ -27,8 +29,8 @@ wrapper remain independent.
 
 Initial target: native Halo on the user's device, connecting to a public HTTPS
 Wavelog installation. Use the existing `wavelog.seery.us` URL as user-entered
-configuration, never a hardcoded default. Start with API v2 tokens. Add legacy
-key support after the v2 workflow works, retaining the same location semantics.
+configuration, never a hardcoded default. This release supports API v2 tokens only. Legacy-key support is deferred by
+human decision after the v2 device test.
 Browser builds, continuous sync, bidirectional edits/deletions, private-network
 servers, and HTTP servers are outside the first release.
 
@@ -235,7 +237,7 @@ create a station, logbook, or QSO during a connection test. Inspect write-scope
 metadata without calling write endpoints.
 
 Automated tests use a fake transport returning response fixtures, not a running
-Wavelog instance. Test HTTPS validation, URL subpaths, token exchange, errors,
+Wavelog instance. Test HTTPS validation, URL subpaths, direct Bearer auth, errors,
 header handling, redaction, and unexpected HTML. Keep token fixtures synthetic.
 
 Device gate: connect to the public HTTPS Wavelog server with a real v2 token;
@@ -346,9 +348,11 @@ Proposed human commit: `feat: upload reviewed QSO groups to matching stations`.
 
 ## Phase 7 — Compatibility and release preparation
 
-Add the legacy-key client adapter if still desired for the first release, using
-the same pure matching/grouping modules and result model. Keep v2 and legacy
-endpoint/authentication paths distinct. Test both transport adapters against
+Decision after Phase 6: the human chose to keep this release API v2 only.
+Do not implement legacy support during this release-preparation phase. A future
+legacy-key client adapter would use
+the same pure matching/grouping modules and result model. Keep future v2 and legacy
+endpoint/authentication paths distinct. Test any future legacy adapter against
 fixtures. Live legacy testing needs a human-provided key and chosen test log;
 do not downgrade or rotate the existing working token automatically.
 

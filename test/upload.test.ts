@@ -4,6 +4,7 @@ import type { HookContext } from "@ham2k/extension-sdk"
 import type { Services } from "../src/account.ts"
 import { classify, chunks, encodeRecord, uploadOperation } from "../src/upload.ts"
 import { parseAdif } from "../src/preview.ts"
+import { createOperationPanel } from "../src/panel.ts"
 const op = { uuid: "op", stationCall: "AD8IS/P", grid: "EM89AB" }
 const credentials = { url: "https://log.example.org", token: "wl2_SYNTHETIC" }
 const stations = [
@@ -196,4 +197,58 @@ test("qso permission removed during review stops before import", async () => {
     url.endsWith("/token") && ++reads === 2 ? { status: 200, body: JSON.stringify({ data: { id: 1, scopes: ["station:read"] } }) } : fetch(url, options)
   await assert.rejects(uploadOperation(f.services, op, {}, f.context), /permission changed/)
   assert.equal(posts(f.calls).length, 0)
+})
+
+test("a large operation uploads every exported contact once and reports each batch", async () => {
+  const f = fixture(1000)
+  const progress: string[] = []
+  const result = await uploadOperation(f.services, op, {}, f.context, (message) => {
+    progress.push(message)
+  })
+  const sent = posts(f.calls).flatMap((call) => parseAdif(JSON.parse(call.body!).adif))
+  assert.equal(result.imported, 1000)
+  assert.equal(result.unattempted, 0)
+  assert.equal(result.batches.length, 50)
+  assert.equal(sent.length, 1000)
+  assert.equal(new Set(sent.map((record) => record.CALL)).size, 1000)
+  assert.equal(progress.length, 51)
+  assert.match(progress[progress.length - 1], /981–1000 of 1000/)
+})
+
+test("unavailable result dialogs preserve confirmed upload counts and release the panel", async () => {
+  const f = fixture(1)
+  f.services.showMessage = async () => {
+    throw new Error(credentials.token)
+  }
+  const panel = createOperationPanel("test", f.services)
+  const args = { panelKey: "operation", operation: op, qsoCount: 1, config: {}, reason: "initial" as const }
+  const event = { controlId: "menu", action: "upload", phase: "activate" as const, sequence: 1 }
+  await panel.onEvent!({ ...args, event }, f.context)
+  const content = await panel.render(args, f.context)
+  if (content.kind !== "markdown") assert.fail("Expected Markdown")
+  assert.match(content.content, /imported 1, duplicates 0/)
+  assert.match(content.content, /Result dialog unavailable/)
+  assert.ok(!content.content.includes(credentials.token))
+  assert.equal(posts(f.calls).length, 1)
+  // A subsequent explicit cancellation opens a new review, with no new write.
+  f.cancel()
+  await panel.onEvent!({ ...args, event }, f.context)
+  assert.equal(posts(f.calls).length, 1)
+  const cancelled = await panel.render(args, f.context)
+  if (cancelled.kind !== "markdown") assert.fail("Expected Markdown")
+  assert.match(cancelled.content, /cancelled; imported 0/)
+})
+
+test("an offline attempt makes no import and a later action uses the newly selected server", async () => {
+  const f = fixture(1),
+    fetch = f.services.fetch
+  f.services.fetch = async () => {
+    throw new Error(credentials.token)
+  }
+  await assert.rejects(uploadOperation(f.services, op, {}, f.context), /Connection failed/)
+  assert.equal(posts(f.calls).length, 0)
+  f.services.fetch = fetch
+  await uploadOperation(f.services, op, {}, { ...f.context, account: { credentials: { ...credentials, url: "https://other.example.org/wavelog" } } })
+  assert.ok(f.calls.every((call) => call.url.startsWith("https://other.example.org/wavelog/api/v2/")))
+  assert.equal(posts(f.calls).length, 1)
 })

@@ -28,7 +28,7 @@ export function createAccount(services: Services): AccountHook {
         key: "token",
         label: "Wavelog API v2 token",
         type: "secret",
-        postface: "A wl2_ token. station:read is sufficient for this read-only test; upload scopes are checked without making changes.",
+        postface: "A wl2_ token. station:read is sufficient for this read-only test; creation/upload scopes are checked without making changes.",
       },
     ],
     async testCredentials(credentials) {
