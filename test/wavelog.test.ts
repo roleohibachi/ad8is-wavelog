@@ -70,7 +70,10 @@ test("connection sends only two GETs with Bearer authentication, returning struc
   }
   const result = await checkConnection(fetch, credentials)
   assert.deepEqual(requests, ["https://log.example.org/wavelog/api/v2/token", "https://log.example.org/wavelog/api/v2/station"])
-  assert.deepEqual(result.stations, [{ id: 7, name: "Hill", callsign: "AD8IS/P", grid: "EM89AB", sota: "W8O/SE-004", pota: "US-5450" }])
+  assert.deepEqual(
+    result.stations.map(({ identity, ...station }) => station),
+    [{ id: 7, name: "Hill", callsign: "AD8IS/P", grid: "EM89AB", sota: "W8O/SE-004", pota: "US-5450" }],
+  )
   assert.deepEqual(result.missingUploadScopes, [])
   assert.match(connectionSummary(result), /1 station-location/)
   assert.ok(!JSON.stringify(result).includes(token))
@@ -78,7 +81,10 @@ test("connection sends only two GETs with Bearer authentication, returning struc
 
 test("a read-only token can connect while reporting missing future upload permissions", async () => {
   const result = await checkConnection(async (url) => (url.endsWith("/token") ? ok({ id: 1, scopes: ["station:read"] }) : ok([])), credentials)
-  assert.deepEqual(result.stations, [])
+  assert.deepEqual(
+    result.stations.map(({ identity, ...station }) => station),
+    [],
+  )
   assert.deepEqual(result.missingUploadScopes, allScopes.slice(1))
   assert.match(connectionSummary(result), /Missing scopes/)
 })

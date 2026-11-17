@@ -1,7 +1,6 @@
 # AD8IS Wavelog
 
-A Halo / Ham2K PoLo Next extension. **Phase 3 adds a local station-location
-preview**, retaining operation details and the read-only API v2 connection test.
+A Halo / Ham2K PoLo Next extension. **Phase 4 adds read-only station reconciliation**, retaining operation details and the read-only API v2 connection test.
 The panel uses Halo's standard Markdown rendering and theme.
 
 There is no station-location creation or QSO upload yet. Those follow the
@@ -15,7 +14,7 @@ of this release; the panel can then display connection, queue and error status.
 
 ## Install and try
 
-The built file is `dist/ad8is-wavelog-0.1.0-alpha.4.h2kext`. Copy it to your
+The built file is `dist/ad8is-wavelog-0.1.0-alpha.5.h2kext`. Copy it to your
 device using your normal file-transfer workflow. In Halo open **Settings →
 Extensions & Features → Install from file…**, choose it, and enable AD8IS
 Wavelog if needed. In an operation view's layout editor, add the **Wavelog**
@@ -62,12 +61,16 @@ it. Missing and present references remain distinct. Comma/semicolon-separated
 reference lists are trimmed, uppercased, deduplicated and sorted for identity.
 
 **Preview settings** in the panel menu edits this panel placement's match fields,
-name format and grid precision. Defaults match the working WaveRover wrapper:
-`STATION_CALLSIGN,MY_GRIDSQUARE,MY_SOTA_REF,MY_POTA_REF`, `{MY_SOTA_REF}`, and six
+name format and grid precision. Current defaults are:
+`STATION_CALLSIGN,MY_GRIDSQUARE,MY_SOTA_REF,MY_POTA_REF`, automatic naming, and six
 characters. Four-character grids are also supported. Callsign and grid remain
 mandatory match fields, and power is deliberately unsupported as identity.
 Every naming placeholder must refer to a selected field; a blank template or
-blank expanded result uses automatic naming. Settings for lookup/ITU fallback
+blank expanded result uses automatic naming: available SOTA refs, POTA refs, then
+grid joined with comma-space. Dates and callsigns are omitted from the automatic
+name but callsign remains part of matching identity. Examples: `W8O/SE-004,
+US-5450, EM89AB`, `US-5450, EM89AB`, or `EM89AB`. Existing panel settings retain
+their saved templates; clear Location name format once to adopt this new default. Settings for lookup/ITU fallback
 will arrive with station creation, where they have an effect.
 
 The preview explicitly excludes private notes and lookup-derived data and caps
@@ -78,6 +81,28 @@ reference, or lacks callsign/grid, preview stops with an error. Display is cappe
 at 50 groups, while the total covers the entire operation. Exports require a
 single resolved callsign per contact; unresolved multi-call forms are rejected.
 The source operation and contacts are never modified.
+
+## Compare with Wavelog
+
+Panel menu → **Compare with Wavelog (read-only)** generates a fresh local preview
+and fetches token metadata and stations using the current account. Each group
+shows an existing station ID/name, a proposal for a new location, ambiguity, or
+a blocked result where identity fields cannot be compared. No stations, logbooks
+or QSOs are created or modified, and this is not a QSO duplicate check.
+
+Matching uses the complete selected structured-field combination, never station
+names. Blank refs differ from present refs. References are normalized as sets;
+case is ignored and grids use the selected precision. Multiple exact matches
+are reported rather than choosing the first. Omitted API fields remain distinct
+from explicitly empty fields and block a potentially matching candidate.
+Only stations readable through the API are considered; server settings may
+restrict the visible list to an active logbook. A new-location proposal means
+no match in that visible list, not proof that no hidden location exists.
+
+Results are not cached or saved as an upload plan. Re-running always regenerates
+the operation preview and refetches stations, including after changing accounts,
+settings or logs. Results show at most 50 groups. Choosing a target for an
+ambiguous group will be part of the later reviewed creation/upload workflow.
 
 ## Network permission and limits
 

@@ -59,6 +59,7 @@ test("panel rendering reads saved summary but does not initiate network or stora
   assert.deepEqual(content.menu, [
     { label: "Preview settings", settings: true },
     { label: "Preview station-locations (local)", event: "preview" },
+    { label: "Compare with Wavelog (read-only)", event: "compare" },
     { label: "Test connection (read-only)", event: "test-connection" },
   ])
   assert.deepEqual([requests.length, sessions.length, messages.length], [0, 0, 0])
@@ -131,4 +132,27 @@ test("unknown menu events do not touch the connection", async () => {
   const { services, requests } = fixture()
   await createOperationPanel("test", services).onEvent!({ ...args, event: { ...event, action: "unrelated" } }, context)
   assert.equal(requests.length, 0)
+})
+
+test("comparison regenerates the local snapshot and refetches stations for the current server each time", async () => {
+  const { services, requests, messages, sessions } = fixture()
+  services.preview = async () => "<EOH><CALL:4>W1AW<STATION_CALLSIGN:7>AD8IS/P<MY_GRIDSQUARE:6>EM89AB<MY_SOTA_REF:10>W8O/SE-004<MY_POTA_REF:7>US-5450<EOR>"
+  let reads = 0
+  const panel = createOperationPanel("test", services)
+  const current = { ...args, operation: { uuid: "op-a", stationCall: "AD8IS/P", grid: "EM89AB" }, event: { ...event, action: "compare" } }
+  const getQsos = async () => {
+    reads++
+    return [{ band: "20m" }]
+  }
+  await panel.onEvent!(current, { online: true, account: { credentials }, getQsos })
+  assert.match(messages[0].text, /Reuse existing station/)
+  assert.match(messages[0].text, /ID 7/)
+  await panel.onEvent!(
+    { ...current, operation: { ...current.operation, uuid: "op-b" } },
+    { online: true, account: { credentials: { ...credentials, url: "https://other.example.org" } }, getQsos },
+  )
+  assert.equal(reads, 2)
+  assert.equal(requests.length, 4)
+  assert.ok(requests[2].startsWith("https://other.example.org/"))
+  assert.equal(sessions.length, 0)
 })

@@ -1,5 +1,49 @@
 # Device acceptance
 
+## Phase 4 — Read-only comparison and automatic names
+
+- Artifact: `dist/ad8is-wavelog-0.1.0-alpha.5.h2kext`.
+- SDK/tools 1.26.0, manifest API 23; app target v26.11.0 build 193.
+- Device result: pending. No station/QSO mutations exist in this milestone.
+- Automated: all 40 tests, typecheck, formatting, build and package validation
+  passed; archive integrity, permissions and license notices checked. Known
+  official activation-preflight warning remains; separate bundle tests pass.
+- SHA-256: `203fc600aadb4519d5cf087b208d19f6085f972f9ac7194b3a2e4af620317f11`.
+- Phase 3 feedback: combined SOTA/POTA preview accepted; human commit `3e0e95e`.
+  The user makes new operations instead of BREAKs, so split-operation behavior
+  is tested automatically, not represented as device-verified.
+
+### Device checklist
+
+1. Install alpha.5 and keep the existing panel/account. Permissions are unchanged.
+2. Preview settings → clear Location name format to enable the new automatic
+   default on this previously configured panel. New panels use it from the start.
+   Expect `SOTA ref, POTA refs, grid`, omitting absent refs, dates and callsigns.
+   A grid-only operation should name the location by grid alone. Nonblank custom
+   templates still work; an existing template is not silently overwritten.
+3. On the known imported combined activation, choose Compare with Wavelog
+   (read-only). Verify the proposed existing station ID in Wavelog Station Setup,
+   with the same callsign, grid and both refs. Its existing name need not match
+   the newly proposed display name. No existing station is renamed.
+4. For an operation whose combination is not in the readable station list,
+   expect a new-location proposal. Comparison does not create it. Same-grid
+   SOTA-only/POTA-only/combined identities must remain distinct where you have
+   such logs available. No need to alter real logs to manufacture test cases.
+5. Multiple matches should be labelled ambiguous; missing API identity fields
+   should block a possible match. These cases have automated coverage if not
+   reproducible on your server. Station-list failures must report an error,
+   not a new-station proposal.
+6. Change preview settings or switch operations and rerun Compare. Expect fresh
+   results. Confirm Wavelog's station/QSO counts remain unchanged throughout.
+
+After reviewing results and diff, make your own milestone commit:
+
+```sh
+git add -A
+git diff --cached
+git commit -S -m "feat: reconcile station previews and name locations by refs and grid"
+```
+
 ## Phase 3 — Local station-location preview
 
 - Artifact: `dist/ad8is-wavelog-0.1.0-alpha.4.h2kext`.

@@ -73,7 +73,7 @@ test("returning to an earlier combination reuses the group; changed power and id
   assert.equal(result.count, 4)
   assert.equal(result.groups.length, 2)
   assert.equal(result.groups[0].count, 3)
-  assert.equal(result.groups[0].name, "W8O/SE-004")
+  assert.equal(result.groups[0].name, "W8O/SE-004, EM89AB")
   assert.equal(result.groups[1].count, 1)
 })
 
@@ -141,7 +141,7 @@ test("multi-reference ordering is not identity and a blank template uses automat
   )
   assert.equal(result.groups.length, 1)
   assert.equal(result.groups[0].count, 2)
-  assert.equal(result.groups[0].name, "AD8IS/P @ EM89AB US-0001,US-0002")
+  assert.equal(result.groups[0].name, "US-0001,US-0002, EM89AB")
 })
 
 test("missing activation hooks cannot silently erase a known SOTA/POTA identity", async () => {

@@ -130,7 +130,7 @@ export async function previewOperation(
     )
   const precision = Number(config.gridPrecision ?? 6)
   if (precision !== 4 && precision !== 6) throw new WavelogError("Grid precision must be 4 or 6.")
-  const template = String(config.nameFormat ?? "{MY_SOTA_REF}")
+  const template = String(config.nameFormat ?? "")
   if ([...template.matchAll(/\{([A-Za-z_]+)\}/g)].some((m) => !fields.includes(m[1].toUpperCase())))
     throw new WavelogError("Every name-format placeholder must be included in Match fields, or clear the name format for automatic naming.")
   if (typeof operation.uuid !== "string" || !ctx.getQsos) throw new WavelogError("Open an operation with log access before previewing.")
@@ -185,13 +185,14 @@ export async function previewOperation(
       if (!values[fields.indexOf("STATION_CALLSIGN")] || !values[gridIndex])
         throw new WavelogError("Exported contacts lack a station callsign or grid. Check the recorded location and export data before uploading.")
       const key = JSON.stringify(values)
-      const named = values.filter(Boolean)
+      const automatic = ["MY_SOTA_REF", "MY_POTA_REF", "MY_GRIDSQUARE"]
+        .map((field) => values[fields.indexOf(field)] ?? "")
+        .filter(Boolean)
+        .join(", ")
       const group = groups.get(key) ?? {
         values,
         count: 0,
-        name:
-          template.replace(/\{([A-Za-z_]+)\}/g, (_match, field: string) => values[fields.indexOf(field.toUpperCase())] ?? "").trim() ||
-          named[0] + (named.length > 1 ? " @ " + named.slice(1).join(" ") : ""),
+        name: template.replace(/\{([A-Za-z_]+)\}/g, (_match, field: string) => values[fields.indexOf(field.toUpperCase())] ?? "").trim() || automatic,
       }
       group.count++
       count++

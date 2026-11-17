@@ -1,8 +1,8 @@
 {
   "key": "ad8is-wavelog",
   "name": "AD8IS Wavelog",
-  "version": "0.1.0-alpha.4",
-  "description": "Local station-location preview and read-only Wavelog connection testing.",
+  "version": "0.1.0-alpha.5",
+  "description": "Preview station combinations and compare with existing Wavelog stations, read-only.",
   "category": "dashboard",
   "api": 23,
   "icon": "file-upload-outline",

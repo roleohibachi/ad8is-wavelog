@@ -1,3 +1,4 @@
+import { reconcile } from "./reconcile.ts"
 import { previewOperation } from "./preview.ts"
 import type { PanelHook } from "@ham2k/extension-sdk"
 import type { Services } from "./account.ts"
@@ -25,10 +26,10 @@ export function createOperationPanel(version: string, services: Services): Panel
           description: "Operation details and read-only Wavelog connection test. No uploads yet.",
           icon: "file-upload-outline",
           on: ["operation", "qsoLogged"],
-          initialConfig: { matchFields: "STATION_CALLSIGN,MY_GRIDSQUARE,MY_SOTA_REF,MY_POTA_REF", nameFormat: "{MY_SOTA_REF}", gridPrecision: 6 },
+          initialConfig: { matchFields: "STATION_CALLSIGN,MY_GRIDSQUARE,MY_SOTA_REF,MY_POTA_REF", nameFormat: "", gridPrecision: 6 },
           form: [
             { type: "field", fieldType: "text", key: "matchFields", label: "Match fields" },
-            { type: "field", fieldType: "text", key: "nameFormat", label: "Location name format (blank = automatic)" },
+            { type: "field", fieldType: "text", key: "nameFormat", label: "Location name format (blank = SOTA, POTA, grid)" },
             {
               type: "field",
               fieldType: "select",
@@ -61,6 +62,7 @@ export function createOperationPanel(version: string, services: Services): Panel
       const menu = [
         { label: "Preview settings", settings: true as const },
         { label: "Preview station-locations (local)", event: "preview" },
+        { label: "Compare with Wavelog (read-only)", event: "compare" },
         { label: "Test connection (read-only)", event: "test-connection" },
       ]
       if (typeof operation.uuid !== "string" || operation.uuid.trim() === "") {
@@ -81,7 +83,7 @@ export function createOperationPanel(version: string, services: Services): Panel
           `QSOs: ${qsoCount}`,
           qsoCount === 0 ? "No contacts logged yet." : undefined,
           text(status, "Not connected"),
-          "Phase 3: local station-location preview. Uploads are not enabled.",
+          "Phase 4: local preview and read-only station comparison. Uploads are not enabled.",
         ]
           .filter((line) => line !== undefined)
           .join("\n\n"),
@@ -89,11 +91,30 @@ export function createOperationPanel(version: string, services: Services): Panel
       }
     },
     async onEvent({ event, operation, config }, ctx) {
-      if (event.controlId === "menu" && event.action === "preview" && !testing) {
+      if (event.controlId === "menu" && ["preview", "compare"].includes(event.action) && !testing) {
         testing = true
         try {
           if (!services.preview) throw new Error("Exporter unavailable")
           const result = await previewOperation(operation, ctx, services.preview, config)
+          if (event.action === "compare") {
+            const connection = await checkConnection(services.fetch, ctx.account?.credentials)
+            const comparison = reconcile(result.groups, result.fields, result.precision, connection.stations)
+            await services.showMessage({
+              presentation: "dialog",
+              title: "Wavelog station comparison (read-only)",
+              text:
+                `${result.count} QSOs; ${result.groups.length} combinations. No stations or QSOs changed. Not a QSO duplicate check.\n\n` +
+                comparison
+                  .slice(0, 50)
+                  .map(
+                    (item) =>
+                      `${text(item.group.name, "Unnamed")} | ${item.group.count} QSOs\n${item.status === "existing" ? "Reuse existing station" : item.status === "new" ? "No match in readable stations: propose new" : item.status === "ambiguous" ? "Ambiguous: several stations match" : "Blocked: identity fields missing/unsupported"}${[...item.matches, ...item.uncertain].map((station) => `\nID ${station.id}: ${text(station.name, "Unnamed")}`).join("")}`,
+                  )
+                  .join("\n\n") +
+                (comparison.length > 50 ? "\n\nShowing first 50 groups." : ""),
+            })
+            return { values: {} }
+          }
           await services.showMessage({
             presentation: "dialog",
             title: "Local station-location preview",

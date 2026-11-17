@@ -1,3 +1,4 @@
+import { STATION_FIELDS } from "./reconcile.ts"
 import type { FetchOptions } from "@ham2k/extension-sdk"
 
 export class WavelogError extends Error {
@@ -9,7 +10,7 @@ export class WavelogError extends Error {
 
 export type Transport = (url: string, options: FetchOptions) => Promise<{ status: number; body: string }>
 export type Credentials = { url: string; token: string }
-export type Station = { id: number; name: string; callsign: string; grid: string; sota: string; pota: string }
+export type Station = { identity?: Record<string, string | null>; id: number; name: string; callsign: string; grid: string; sota: string; pota: string }
 export type Connection = { url: string; stations: Station[]; missingUploadScopes: string[] }
 
 const UPLOAD_SCOPES = ["station:read", "station:write", "qso:write", "logbook:read", "logbook:write", "lookup:read"]
@@ -111,7 +112,23 @@ export async function checkConnection(fetch: Transport, input: Record<string, st
     for (const field of ["name", "callsign", "gridsquare", "sota", "pota"]) {
       if (row[field] != null && typeof row[field] !== "string") throw new WavelogError("Wavelog returned unsupported station field types.")
     }
-    return { id: Number(row.id), name: text(row.name), callsign: text(row.callsign), grid: text(row.gridsquare), sota: text(row.sota), pota: text(row.pota) }
+    const identity: Record<string, string | null> = {}
+    for (const key of Object.values(STATION_FIELDS)) {
+      if (!Object.prototype.hasOwnProperty.call(row, key)) continue
+      const value = row[key]
+      if (value != null && typeof value !== "string" && typeof value !== "number")
+        throw new WavelogError("Wavelog returned unsupported station identity fields.")
+      identity[key] = value == null ? null : String(value)
+    }
+    return {
+      identity,
+      id: Number(row.id),
+      name: text(row.name),
+      callsign: text(row.callsign),
+      grid: text(row.gridsquare),
+      sota: text(row.sota),
+      pota: text(row.pota),
+    }
   })
   return { url: credentials.url, stations, missingUploadScopes: UPLOAD_SCOPES.filter((scope) => !scopes.includes(scope)) }
 }

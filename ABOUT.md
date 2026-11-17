@@ -2,7 +2,7 @@
 
 AD8IS Wavelog is an operation dashboard panel for Ham2K Halo / PoLo Next.
 This development version previews local station-location combinations and tests a public HTTPS
-Wavelog API v2 connection. It reads existing station-locations; station creation
+Wavelog API v2 connection. It can compare the local groups against existing station-locations, without changing them; station creation
 and QSO upload will come in later milestones.
 
 Configure your Wavelog URL and `wl2_` token in Settings → Accounts → Wavelog.
@@ -27,3 +27,7 @@ run of the operation. Preview settings control match fields, naming and grid
 precision. It uses Halo's full ADIF generator, not activity-specific award
 submission files. BREAK/START segments, explicit contact locations and per-QSO
 power are preserved; no Wavelog request is made by the preview.
+
+Compare with Wavelog (read-only) reports existing IDs, proposed new locations,
+ambiguous matches and missing identity fields. Automatic names contain available
+SOTA/POTA refs and grid; dates and callsigns are omitted from names only.
