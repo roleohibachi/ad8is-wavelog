@@ -73,7 +73,7 @@ It does not propose an app-core change. No PR or catalog entry has been created.
    short device checklist in TESTING.md. Record only the checks actually run.
 2. Review `git diff`, new files and the existing milestone history. `LICENSE`
    is still untracked at preparation time; include it when staging the release
-   so the source distribution carries its MIT license. Review the bundled
+   so the source distribution carries its AGPL-3.0-only license. Review the bundled
    third-party notices too. No WaveRover code is included.
 3. Make your own traceable commit, signed/verified where possible. Suggested
    message: `fix: harden manual upload task recovery and document release`.

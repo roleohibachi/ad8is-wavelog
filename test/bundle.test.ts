@@ -102,7 +102,7 @@ test("built bundle renders without network and performs only explicit account re
     false,
   )
   const hook = registrations[0].hook as PanelHook
-  const context = new Proxy({} as HookContext, { get: (_target, key) => (key === "account" ? undefined : unexpected()) })
+  const context = new Proxy({} as HookContext, { get: (_target, key) => (key === "account" ? undefined : key === "online" ? false : unexpected()) })
   const [descriptor] = await hook.getPanels({}, context)
   const content = await hook.render(
     {
@@ -114,9 +114,9 @@ test("built bundle renders without network and performs only explicit account re
     },
     context,
   )
-  if (content.kind !== "markdown") assert.fail("Expected Markdown")
-  assert.match(content.content, /Operation ID: device-test-operation/)
-  assert.match(content.content, /QSOs: 25/)
+  if (content.kind !== "scene") assert.fail("Expected scene")
+  assert.match(JSON.stringify(content), /Upload new QSOs/)
+  assert.match(JSON.stringify(content), /QSO EDITS ARE NOT SYNCED/)
   assert.equal(requests.length, 0)
   allowReads = true
   assert.equal(registrations[1].category, "account")

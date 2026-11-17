@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import type { HookContext } from "@ham2k/extension-sdk"
 import { createLocation } from "../src/create.ts"
+import { createOperationPanel } from "../src/panel.ts"
 import type { Services } from "../src/account.ts"
 
 const credentials = { url: "https://log.example.org", token: "wl2_SYNTHETIC" }
@@ -63,6 +64,88 @@ test("reviewed creation posts station once, preserves logbook links and never im
     false,
   )
   assert.equal(calls.filter((c) => c.url.endsWith("/station") && c.method === "GET").length, 2)
+})
+
+test("upload button reviews a missing station before a separate QSO confirmation", async () => {
+  const f = fixture()
+  f.answers.push({ confirm: true })
+  const originalFetch = f.services.fetch
+  f.services.fetch = async (url, options) => {
+    if (url.endsWith("/token")) return response({ id: 1, scopes: [...scopes, "qso:write"] })
+    if (url.endsWith("/qso")) {
+      f.calls.push({ url, method: options.method ?? "GET", body: options.body })
+      assert.equal(JSON.parse(options.body!).station_profile_id, 9)
+      return response({ parsed: 1, imported: 1, skipped: 0, messages: [] })
+    }
+    return originalFetch(url, options)
+  }
+  const messages: string[] = []
+  f.services.showMessage = async (message) => {
+    messages.push(message.text)
+  }
+  await createOperationPanel("test", f.services).onEvent!(
+    {
+      panelKey: "operation",
+      operation: op,
+      qsoCount: 1,
+      config: {},
+      reason: "initial",
+      event: { controlId: "upload", action: "upload", phase: "activate", sequence: 1 },
+    },
+    context,
+  )
+  assert.equal(f.forms.length, 3)
+  assert.deepEqual(
+    writes(f.calls).map((call) => call.url.split("/").pop()),
+    ["station", "2", "qso"],
+  )
+  assert.match(messages[0], /Imported: 1/)
+})
+
+test("cancelling station creation from the upload button performs no writes", async () => {
+  const f = fixture()
+  f.answers.splice(0, f.answers.length, null)
+  const originalFetch = f.services.fetch
+  f.services.fetch = async (url, options) => (url.endsWith("/token") ? response({ id: 1, scopes: [...scopes, "qso:write"] }) : originalFetch(url, options))
+  const messages: string[] = []
+  f.services.showMessage = async (message) => {
+    messages.push(message.text)
+  }
+  await createOperationPanel("test", f.services).onEvent!(
+    {
+      panelKey: "operation",
+      operation: op,
+      qsoCount: 1,
+      config: {},
+      reason: "initial",
+      event: { controlId: "upload", action: "upload", phase: "activate", sequence: 1 },
+    },
+    context,
+  )
+  assert.equal(writes(f.calls).length, 0)
+  assert.match(messages[0], /cancelled/)
+})
+
+test("upload permission is checked before the button creates a station", async () => {
+  const f = fixture()
+  const messages: string[] = []
+  f.services.showMessage = async (message) => {
+    messages.push(message.text)
+  }
+  await createOperationPanel("test", f.services).onEvent!(
+    {
+      panelKey: "operation",
+      operation: op,
+      qsoCount: 1,
+      config: {},
+      reason: "initial",
+      event: { controlId: "upload", action: "upload", phase: "activate", sequence: 1 },
+    },
+    context,
+  )
+  assert.equal(f.forms.length, 0)
+  assert.equal(writes(f.calls).length, 0)
+  assert.match(messages[0], /qso:write/)
 })
 
 test("cancellation or an unchecked confirmation never writes", async () => {

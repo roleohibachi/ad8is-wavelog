@@ -1,7 +1,7 @@
 {
   "key": "ad8is-wavelog",
   "name": "AD8IS Wavelog",
-  "version": "0.1.0-alpha.8",
+  "version": "0.1.0-alpha.9",
   "description": "Review station-locations and upload operation QSOs to Wavelog API v2.",
   "category": "dashboard",
   "api": 23,

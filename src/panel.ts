@@ -5,7 +5,7 @@ import { previewOperation } from "./preview.ts"
 import type { PanelHook } from "@ham2k/extension-sdk"
 import type { Services } from "./account.ts"
 import { saveConnection } from "./account.ts"
-import { checkConnection, connectionSummary, credentialsOf, WavelogError } from "./wavelog.ts"
+import { checkConnection, connectionSummary, WavelogError } from "./wavelog.ts"
 
 // Operation data is text, never Markdown supplied by the operator. Escape it
 // so a title cannot introduce a link, remote image, or extra document structure.
@@ -17,10 +17,11 @@ function text(value: unknown, fallback: string): string {
     .replace(/[\\`*_{}\[\]()<>!#+|~&]/g, "\\$&")
 }
 
-export function createOperationPanel(version: string, services: Services): PanelHook {
+export function createOperationPanel(_version: string, services: Services): PanelHook {
   let testing = false
   let queued = false
   let jobStatus = ""
+  let check: { key: string; status: string; busy: boolean } | undefined
   const panel: PanelHook = {
     async getPanels() {
       return [
@@ -49,60 +50,139 @@ export function createOperationPanel(version: string, services: Services): Panel
         },
       ]
     },
-    async render({ operation, qsoCount }, ctx) {
-      const header = `Extension: ad8is-wavelog ${text(version, "unknown")}`
-      const account = ctx.account
-      let status = "Configure Wavelog under Settings → Accounts, then use this panel's menu → Test connection."
-      if (account?.credentials) {
-        try {
-          const credentials = credentialsOf(account.credentials)
-          status =
-            account.session?.server === credentials.url && account.session?.summary
-              ? `Last successful test: ${account.session.summary} Test again to verify current access.`
-              : "Account configured. Use the panel menu → Test connection to verify current access."
-        } catch {
-          status = "Wavelog account needs configuration: enter a public HTTPS URL and API v2 token in Settings → Accounts."
-        }
-      }
+    async render({ operation, qsoCount, config, reason }, ctx) {
       const menu = [
-        { label: "Preview settings", settings: true as const },
+        { label: "Settings", settings: true as const },
+        { label: "Refresh station-locations", event: "refresh" },
         { label: "Preview station-locations (local)", event: "preview" },
         { label: "Compare with Wavelog (read-only)", event: "compare" },
         { label: "Create missing station-location… (no QSOs)", event: "create" },
-        { label: "Upload QSOs…", event: "upload" },
         { label: "Test connection (read-only)", event: "test-connection" },
       ]
-      if (typeof operation.uuid !== "string" || operation.uuid.trim() === "") {
-        return {
-          kind: "markdown",
-          content: `${header}\n\nOpen an operation to see its details.\n\n${text(status, "Not connected")}`,
-          menu,
+      const validOperation = typeof operation.uuid === "string" && operation.uuid.trim() !== ""
+      // Keys stay in memory only; never show credentials in the scene or errors.
+      const key = JSON.stringify([operation, qsoCount, config, ctx.account?.credentials, ctx.online])
+      if (["visible", "qsoLogged", "operation", "config"].includes(reason) && check) check = undefined
+      if (validOperation && qsoCount > 0 && ctx.online && ctx.account?.credentials && services.schedule && services.preview && check?.key !== key) {
+        check = { key, status: "Checking station-locations…", busy: true }
+        const pendingCheck = check
+        try {
+          services.schedule(async () => {
+            try {
+              const preview = await previewOperation(operation, ctx, services.preview!, config)
+              const connection = await checkConnection(services.fetch, ctx.account?.credentials)
+              const items = reconcile(preview.groups, preview.fields, preview.precision, connection.stations)
+              const lines = items
+                .slice(0, 2)
+                .flatMap((item) =>
+                  item.status === "existing"
+                    ? ["EXISTING station-location:", `${item.matches[0].name} (ID ${item.matches[0].id})`]
+                    : item.status === "new"
+                      ? ["NEW station-location to create:", item.group.name]
+                      : ["Station-location needs review:", `${item.group.name} (${item.status})`],
+                )
+              if (items.length > 2) lines.push(`+${items.length - 2} more: use Compare in the menu`)
+              if (check === pendingCheck) check = { key, status: lines.join("\n"), busy: false }
+            } catch (error) {
+              if (check === pendingCheck)
+                check = { key, status: error instanceof WavelogError ? error.message : "Could not check station-locations.", busy: false }
+            }
+          })
+        } catch {
+          check = { key, status: "Could not start station check. Use Refresh to try again.", busy: false }
         }
       }
-
+      const status = !validOperation
+        ? "Open an operation."
+        : !qsoCount
+          ? "No contacts to upload yet."
+          : !ctx.online
+            ? "Offline. Connect to check station-locations."
+            : !ctx.account?.credentials
+              ? "Configure your Wavelog account in Settings → Accounts."
+              : check?.key === key
+                ? check.status
+                : "Station-locations have not been checked."
+      const busy = queued || testing || (check?.key === key && check.busy)
       return {
-        kind: "markdown",
-        content: [
-          header,
-          `Operation: ${text(operation.title, "Unnamed operation")}`,
-          `Operation ID: ${text(operation.uuid, "unavailable")}`,
-          `Station callsign: ${text(operation.stationCall, "Not set")}`,
-          `QSOs: ${qsoCount}`,
-          qsoCount === 0 ? "No contacts logged yet." : undefined,
-          text(status, "Not connected"),
-          jobStatus ? text(jobStatus, "") : "Manual, reviewed uploads. No automatic uploads.",
-        ]
-          .filter((line) => line !== undefined)
-          .join("\n\n"),
+        kind: "scene",
+        scene: {
+          version: 1,
+          width: 360,
+          height: 280,
+          values: {},
+          layers: [],
+          controls: [
+            ...status
+              .split("\n")
+              .slice(0, 20)
+              .map((line, i) => ({ id: `status${i}`, kind: "nativeText" as const, label: line, style: "title" as const })),
+            {
+              id: "upload",
+              kind: "nativeButton",
+              label: "Upload new QSOs",
+              event: "upload",
+              disabled: !validOperation || !qsoCount || !ctx.online || !ctx.account?.credentials || !!busy,
+            },
+            { id: "warning", kind: "nativeText", label: "⚠️ QSO EDITS ARE NOT SYNCED", style: "title" },
+            { id: "warning2", kind: "nativeText", label: "Edit uploaded QSOs in Wavelog too.", style: "body" },
+            { id: "warning3", kind: "nativeText", label: "Changes can create duplicates.", style: "body" },
+            ...(jobStatus ? [{ id: "job", kind: "nativeText" as const, label: jobStatus, style: "body" as const }] : []),
+          ],
+          layout: {
+            column: [
+              ...status
+                .split("\n")
+                .slice(0, 20)
+                .map((_, i) => ({ control: `status${i}` })),
+              { control: "upload", height: 56 },
+              { control: "warning" },
+              { control: "warning2" },
+              { control: "warning3" },
+              ...(jobStatus ? [{ control: "job" }] : []),
+            ],
+            padding: 12,
+            spacing: 12,
+            crossAxisAlignment: "stretch",
+          },
+        },
         menu,
       }
     },
     async onEvent({ event, operation, config }, ctx) {
-      if (event.controlId === "menu" && event.action === "upload" && !testing) {
+      if (["menu", "upload"].includes(event.controlId) && event.action === "upload" && !testing) {
         testing = true
         const label = String(operation.title ?? operation.uuid ?? "operation")
         let completed = false
         try {
+          // Recheck immediately before initiating any creation; stale display state
+          // is never used as authorization to write.
+          if (!services.preview) throw new WavelogError("Local exporter is unavailable.")
+          let previousMissing = Number.POSITIVE_INFINITY
+          for (;;) {
+            const currentOp = await ctx.getOperation?.(String(operation.uuid))
+            if (!currentOp) throw new WavelogError("Could not read this operation. No contacts uploaded.")
+            const preview = await previewOperation(currentOp, ctx, services.preview, config)
+            const connection = await checkConnection(services.fetch, ctx.account?.credentials)
+            if (connection.missingUploadScopes.includes("qso:write")) throw new WavelogError("Token is missing qso:write. No station or contact was created.")
+            const matches = reconcile(preview.groups, preview.fields, preview.precision, connection.stations)
+            if (matches.some((item) => item.status === "ambiguous" || item.status === "blocked"))
+              throw new WavelogError("Station-location matching needs review. No contacts uploaded.")
+            const missing = matches.filter((item) => item.status === "new").length
+            if (!missing) break
+            if (missing >= previousMissing)
+              throw new WavelogError(
+                "The created station is not visible in the current station list. Inspect Wavelog before trying again. No contacts uploaded.",
+              )
+            previousMissing = missing
+            const message = await createLocation(services, currentOp, config, ctx)
+            check = undefined
+            if (!message.startsWith("Created station ID") && !message.includes("will be reused")) {
+              jobStatus = "Station creation cancelled. No contacts uploaded."
+              await services.showMessage({ presentation: "dialog", title: "Station-location", text: message })
+              return { values: {} }
+            }
+          }
           const result = await uploadOperation(services, operation, config, ctx, (progress) => {
             jobStatus = `Upload for ${label}: ${progress}`
           })
@@ -129,6 +209,7 @@ export function createOperationPanel(version: string, services: Services): Panel
         testing = true
         try {
           const message = await createLocation(services, operation, config, ctx)
+          check = undefined
           await services.showMessage({ presentation: "dialog", title: "Station-location creation", text: message })
         } catch (error) {
           await services.showMessage({
@@ -230,7 +311,12 @@ export function createOperationPanel(version: string, services: Services): Panel
   // rendering and log-change triggers never queue work. No timers resume it.
   const execute = panel.onEvent!.bind(panel)
   panel.onEvent = async (args, ctx) => {
-    if (args.event.controlId !== "menu" || !["preview", "compare", "test-connection", "create", "upload"].includes(args.event.action)) return { values: {} }
+    if (args.event.controlId === "menu" && args.event.action === "refresh") {
+      check = undefined
+      return { values: {} }
+    }
+    if (!["menu", "upload"].includes(args.event.controlId) || !["preview", "compare", "test-connection", "create", "upload"].includes(args.event.action))
+      return { values: {} }
     if (queued || testing) return { values: {} }
     if (!services.schedule) return execute(args, ctx)
     queued = true

@@ -225,18 +225,18 @@ test("unavailable result dialogs preserve confirmed upload counts and release th
   const event = { controlId: "menu", action: "upload", phase: "activate" as const, sequence: 1 }
   await panel.onEvent!({ ...args, event }, f.context)
   const content = await panel.render(args, f.context)
-  if (content.kind !== "markdown") assert.fail("Expected Markdown")
-  assert.match(content.content, /imported 1, duplicates 0/)
-  assert.match(content.content, /Result dialog unavailable/)
-  assert.ok(!content.content.includes(credentials.token))
+  if (content.kind !== "scene") assert.fail("Expected scene")
+  assert.match(JSON.stringify(content), /imported 1, duplicates 0/)
+  assert.match(JSON.stringify(content), /Result dialog unavailable/)
+  assert.ok(!JSON.stringify(content).includes(credentials.token))
   assert.equal(posts(f.calls).length, 1)
   // A subsequent explicit cancellation opens a new review, with no new write.
   f.cancel()
   await panel.onEvent!({ ...args, event }, f.context)
   assert.equal(posts(f.calls).length, 1)
   const cancelled = await panel.render(args, f.context)
-  if (cancelled.kind !== "markdown") assert.fail("Expected Markdown")
-  assert.match(cancelled.content, /cancelled; imported 0/)
+  if (cancelled.kind !== "scene") assert.fail("Expected scene")
+  assert.match(JSON.stringify(cancelled), /cancelled; imported 0/)
 })
 
 test("an offline attempt makes no import and a later action uses the newly selected server", async () => {

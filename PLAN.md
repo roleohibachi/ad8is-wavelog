@@ -1,5 +1,22 @@
 # Halo Wavelog extension: phased implementation
 
+## Publication paused pending Halo's QSO service integration
+
+Sebastian (KI2D), Ham2K's lead developer, says he is working on a new extension
+system for pushing QSOs to other services, with pulling planned as well. He
+expects it to make the Wavelog integration smoother, but it will require changes
+to this extension's code and a different UI. He asked to hold off on approving
+the extension until the new system is working; his estimate was about a week.
+This is an estimate, not a release commitment.
+
+The human will follow up with Sebastian on where to find the new implementation
+and documentation when ready. Until then, hold off on catalog submission and
+approval. The existing extension can continue to be used privately. Once the
+new system is available, assess its API and migration path, including how it
+handles changed QSOs, and retain the independently useful station-location
+grouping, matching, Wavelog client and tests where appropriate. Do not assume
+the new push/pull system automatically solves edit synchronization.
+
 Status: plan reviewed and initially committed by the human. Phase 1 was
 implemented as `0.1.0-alpha.1`, installed by the human and committed as
 `410b290`. The human authorized continuing to Phase 2, read-only account and
@@ -9,7 +26,9 @@ operation was tested on-device; split-operation device coverage is unavailable
 and remains automated-only. Phase 4 was accepted and committed by the human as `1b8e008`. Phase 5 was accepted and committed by the human as `9222738`. Phase 6 (`0.1.0-alpha.7`) was reported working and committed by the human as
 `80d8c9a`. Phase 7 release preparation is implemented as `0.1.0-alpha.8`, pending
 upgrade verification. The human explicitly chose API v2 only for this release;
-legacy support is deferred. See TESTING.md and RELEASE.md. No device installation, publication or commits have been
+legacy support is deferred. The human then requested the alpha.9 simplified
+panel and authorized a read-only station check on opening it. See TESTING.md
+and RELEASE.md. No device installation, publication or commits have been
 performed by the assistant. Work lives under `./dev`.
 
 Phase 1 device feedback: the human installed `0.1.0-alpha.1` successfully and
@@ -39,7 +58,7 @@ plain and functional, using an operation dashboard panel with standard Halo
 controls/forms for Preview, Upload and results. The panel is the final entry
 point, not a workaround pending upstream changes. Network writes
 must never happen from panel rendering, export-option discovery, or log-save
-hooks. Changing a log should not unexpectedly upload it.
+hooks. The alpha.9 panel schedules read-only station checks when visible. Changing a log should not unexpectedly upload it.
 
 The panel can later show an opt-in live-upload mode, connection/queue status,
 last successful upload and per-contact failures. Keep transport, station matching
@@ -183,9 +202,9 @@ Resolve these semantics before writing network mutations:
   local dry-run separately from server comparison. Neither promises exact QSO
   duplicate counts; those depend on Wavelog's import response.
 
-There is no LICENSE file in the current WaveRover checkout. Implement from the
-behavioral contract and independently written fixtures; confirm permission
-before copying source or protected test material for redistribution.
+WaveRover now declares AGPL-3.0-only. The human chose the same license for
+this extension. The implementation was written independently from the behavioral
+contract and fixtures; no WaveRover source was copied or bundled.
 
 Human gate: review this contract, API-v2-first scope and parity decisions.
 Proposed human commit: `docs: define Wavelog extension milestones and semantics`.

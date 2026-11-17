@@ -3,7 +3,7 @@
 A Halo / Ham2K PoLo Next extension that uploads operation QSOs to the matching
 Wavelog station-locations. Preview, compare, create missing locations, then
 review and upload.
-The panel uses Halo's standard Markdown rendering and theme.
+The panel uses Halo's standard native controls and theme.
 
 The manual workflow has been tested on-device through the human-reviewed
 phases in [PLAN.md](PLAN.md). This release supports API v2 tokens only.
@@ -15,7 +15,7 @@ of this release; the panel can then display connection, queue and error status.
 
 ## Install and try
 
-The built file is `dist/ad8is-wavelog-0.1.0-alpha.8.h2kext`. Copy it to your
+The built file is `dist/ad8is-wavelog-0.1.0-alpha.9.h2kext`. Copy it to your
 device using your normal file-transfer workflow. In Halo open **Settings →
 Extensions & Features → Install from file…**, choose it, and enable AD8IS
 Wavelog if needed. In an operation view's layout editor, add the **Wavelog**
@@ -35,8 +35,9 @@ In the Wavelog panel, open its tab/settings menu and choose **Test connection
 (read-only)**. The result dialog lists the readable station count and the first
 ten IDs, names, callsigns, grids and SOTA/POTA references. The panel may show a
 last-successful-test summary; that is historical, not a live connectivity check.
-Panel rendering never makes requests. Reopen/refresh the panel after changing
-the account if it still shows the previous render.
+Opening the panel schedules a read-only station check when online and configured.
+The result is informational: a fresh check happens before any write. Use Refresh
+in the menu after changes made in Wavelog.
 
 For one token covering the entire workflow, enable all six scopes:
 
@@ -153,11 +154,12 @@ Concurrent edits between the last read and PATCH can still race.
 
 ## Upload reviewed QSOs
 
-Panel menu → **Upload QSOs…** builds a fresh local snapshot and compares station
-identities again. Every group must have exactly one existing station target.
-For a missing target, use the already-tested Create action, then rerun Upload;
-this release keeps station creation and QSO upload as separate
-reviewed steps. Ambiguous/blocked matches cannot upload.
+**Upload new QSOs** builds a fresh local snapshot and compares station identities
+again. When a target is missing, it opens the reviewed station creation flow;
+each missing location requires its own confirmation. It then presents a separate
+QSO upload confirmation. Cancel station creation to stop without uploading.
+Ambiguous/blocked matches cannot upload. If a created location is not visible
+through the API, the action stops; inspect Wavelog before another attempt.
 
 Review the HTTPS server, group counts and station IDs, then check the explicit
 confirmation box to import. Cancellation or an unchecked box makes no writes.
@@ -187,7 +189,9 @@ Panel actions start a single tracked task and return promptly, avoiding Halo's
 five-second panel-event timeout while the review dialog or import is running.
 This also applies to Preview, Compare, Test connection and Create. Repeat taps
 are ignored while an action runs. A visible panel refreshes every two seconds
-for progress; rendering never performs API requests or starts jobs. If the host
+for progress. A visible panel schedules read-only station checks when first opened,
+reopened or its operation changes; refresh ticks alone do not start checks.
+Only an explicit button or menu action can create locations or upload QSOs. If the host
 cannot start a task, the panel reports that no action started and permits another
 explicit attempt. If the final results dialog fails to open, the panel retains
 the aggregate counts for the completed run.
@@ -196,9 +200,10 @@ Keep Halo in the foreground until a result arrives. Closing a panel is not a
 cancel action once import has begun. Mobile background execution is not
 reliable; runtime/app restart loses in-memory job status and never resumes
 uploads automatically. Inspect Wavelog before retrying an interrupted/uncertain
-upload. Re-uploading an unchanged log relies on Wavelog's duplicate detection;
-edits to identifying contact fields may be new contacts, and edits/deletions are
-not synchronized. No exactly-once delivery guarantee or live sync is claimed.
+upload. Re-uploading an unchanged log relies on Wavelog's duplicate detection. **Edits
+to uploaded QSOs do not sync:** correct them in Wavelog too. Changing callsign,
+time, band, mode or station-location can create a second contact instead.
+Deletions are not synchronized. No exactly-once delivery guarantee or live sync is claimed.
 
 ## Network permission and limits
 
@@ -273,5 +278,6 @@ Source lives in `src/`; tests in `test/`; generated output in `build/` and
 `npm run dev` is available for local development but is not necessary for the
 file-installed device test. No catalog publication has been performed.
 
-Original project code is MIT licensed. SDK/scaffold attribution is in
+Original project code is licensed under [AGPL-3.0-only](LICENSE), matching
+WaveRover. SDK/scaffold attribution is in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). No WaveRover source is included.

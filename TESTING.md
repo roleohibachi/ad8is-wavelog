@@ -1,5 +1,39 @@
 # Device acceptance
 
+## Alpha.9 — Simplified upload panel
+
+- Artifact: `dist/ad8is-wavelog-0.1.0-alpha.9.h2kext`; SDK/tools 1.26.0,
+  manifest API 23; target app v26.11.0 build 193.
+- Device check pending. No real uploads or station creations performed by the
+  assistant. 71 tests, typecheck, formatting, build, archive, manifest and
+  package checks passed. The documented host-library activation preflight
+  warning remains; the separate bundled-SDK activation test passes.
+- SHA-256: `af3663c646a77e366b9f73c93aad592d0ee6b040a32e47868d742199d1fc396d`.
+- The local machine has no Flutter or Android device tooling on PATH. SDK scene
+  and interaction tests run locally, but the actual native rendering, overflow,
+  accessibility and font scaling still need a device check.
+
+### Device checklist
+
+1. Install alpha.9 over alpha.8 and check account/panel settings survive. Open
+   an existing operation with contacts. The panel should briefly show a check,
+   then the existing station name or a new-location proposal. Switch tabs away
+   and back and check it refreshes. Compare the station with Wavelog.
+2. Confirm the **Upload new QSOs** button and the ⚠️ edit warning are visible
+   and legible together, including on a narrow panel and with larger text. The
+   warning should say edits are not synced and can create duplicates.
+3. Open an offline or unconfigured operation; check the status and disabled
+   button. Reconnect and use Refresh station-locations from the menu.
+4. Cancel an upload to an existing station and verify Wavelog is unchanged.
+   Optionally upload an unchanged known log to check duplicate results.
+5. If a real new activation is available, use Upload new QSOs; review and
+   cancel station creation first, then repeat and confirm the location followed
+   by the separate QSO upload confirmation. Check station metadata and QSOs in
+   Wavelog. If unavailable, this path remains covered by synthetic tests only.
+6. A multi-location/BREAK operation should show multiple locations; ambiguity
+   and missing fields should block writes. Check the menu Compare action for
+   all combinations. If a write is interrupted, inspect Wavelog before retrying.
+
 ## Phase 7 — API v2 release preparation
 
 - Artifact: `dist/ad8is-wavelog-0.1.0-alpha.8.h2kext`.

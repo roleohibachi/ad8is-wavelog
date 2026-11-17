@@ -46,36 +46,20 @@ test("account test reads token and stations, saving only a nonsecret summary", a
   assert.ok(!JSON.stringify(sessions).includes(token))
 })
 
-test("panel rendering reads saved summary but does not initiate network or storage calls", async () => {
+test("the panel presents upload and warning without exposing stored credentials", async () => {
   const { services, sessions, messages, requests } = fixture()
   const panel = createOperationPanel("test", services)
   const content = await panel.render(args, {
     online: true,
-    account: { credentials, session: { server: credentials.url, summary: "Connected previously" } },
+    account: { credentials, session: { server: credentials.url, summary: "OLD SUMMARY" } },
   } as HookContext)
-  if (content.kind !== "markdown") assert.fail("Expected Markdown")
-  assert.match(content.content, /Last successful test/)
-  assert.ok(!content.content.includes(token))
-  assert.deepEqual(content.menu, [
-    { label: "Preview settings", settings: true },
-    { label: "Preview station-locations (local)", event: "preview" },
-    { label: "Compare with Wavelog (read-only)", event: "compare" },
-    { label: "Create missing station-location… (no QSOs)", event: "create" },
-    { label: "Upload QSOs…", event: "upload" },
-    { label: "Test connection (read-only)", event: "test-connection" },
-  ])
+  if (content.kind !== "scene") assert.fail("Expected scene")
+  const output = JSON.stringify(content)
+  assert.match(output, /Upload new QSOs/)
+  assert.match(output, /QSO EDITS ARE NOT SYNCED/)
+  assert.ok(!output.includes(token))
+  assert.ok(!output.includes("OLD SUMMARY"))
   assert.deepEqual([requests.length, sessions.length, messages.length], [0, 0, 0])
-})
-
-test("panel ignores prior success from a different configured server", async () => {
-  const { services } = fixture()
-  const content = await createOperationPanel("test", services).render(args, {
-    online: true,
-    account: { credentials, session: { server: "https://other.example.org", summary: "OLD SUMMARY" } },
-  } as HookContext)
-  if (content.kind !== "markdown") assert.fail("Expected Markdown")
-  assert.doesNotMatch(content.content, /OLD SUMMARY/)
-  assert.match(content.content, /verify current access/)
 })
 
 test("explicit menu action performs read-only test and shows real station IDs and metadata", async () => {
@@ -186,9 +170,9 @@ test("a failed task launch releases the panel for the next explicit action", asy
   await panel.onEvent!({ ...args, event }, context)
   assert.equal(f.requests.length, 0)
   const content = await panel.render(args, context)
-  if (content.kind !== "markdown") assert.fail("Expected Markdown")
-  assert.match(content.content, /could not start/)
-  assert.ok(!content.content.includes(token))
+  if (content.kind !== "scene") assert.fail("Expected scene")
+  assert.match(JSON.stringify(content), /could not start/)
+  assert.ok(!JSON.stringify(content).includes(token))
   f.services.schedule = (task) => {
     tasks.push(task)
   }

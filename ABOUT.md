@@ -19,7 +19,8 @@ Halo itself may follow server redirects. Use a trusted public HTTPS URL that
 serves API JSON directly, without an interactive SSO/login redirect. LAN,
 Tailscale and plain HTTP installations are outside this version's scope.
 
-There are no automatic uploads or requests while the panel renders, and no
+Opening the panel triggers a read-only station check when online; uploads and
+station creation require confirmation. No
 companion server or change to Halo itself is required. This is an independent
 integration, not an official Wavelog or Ham2K release.
 
@@ -40,10 +41,12 @@ lookup is optional. Required write permissions are station:write and
 logbook:write, in addition to their read scopes. No contacts are imported.
 Inspect Wavelog before retrying an uncertain or partially successful creation.
 
-Upload QSOs… reviews target station IDs and counts before an explicit
+Upload new QSOs reviews target station IDs and counts before an explicit
 confirmation. It imports sequential ADIF batches and reports aggregate outcomes.
-Missing station-locations must be created/reviewed first. Upload needs qso:write
+Missing station-locations are reviewed and created first, with separate confirmations. Upload needs qso:write
 and station:read; the complete workflow uses the six scopes listed in README.
 Actions run as tracked jobs, not from panel rendering. Keep Halo foregrounded
 and inspect Wavelog before retrying any interrupted or uncertain import.
-There is no automatic retry, restart/resume, live sync or edit/delete mirroring.
+⚠️ Edits to previously uploaded QSOs are not synced. Correct them in Wavelog
+too; some changes may create duplicates. There is no automatic retry,
+restart/resume, live sync or edit/delete mirroring.
