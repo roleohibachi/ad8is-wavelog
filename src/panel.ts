@@ -1,3 +1,4 @@
+import { previewOperation } from "./preview.ts"
 import type { PanelHook } from "@ham2k/extension-sdk"
 import type { Services } from "./account.ts"
 import { saveConnection } from "./account.ts"
@@ -24,6 +25,21 @@ export function createOperationPanel(version: string, services: Services): Panel
           description: "Operation details and read-only Wavelog connection test. No uploads yet.",
           icon: "file-upload-outline",
           on: ["operation", "qsoLogged"],
+          initialConfig: { matchFields: "STATION_CALLSIGN,MY_GRIDSQUARE,MY_SOTA_REF,MY_POTA_REF", nameFormat: "{MY_SOTA_REF}", gridPrecision: 6 },
+          form: [
+            { type: "field", fieldType: "text", key: "matchFields", label: "Match fields" },
+            { type: "field", fieldType: "text", key: "nameFormat", label: "Location name format (blank = automatic)" },
+            {
+              type: "field",
+              fieldType: "select",
+              key: "gridPrecision",
+              label: "Grid precision",
+              options: [
+                { label: "4", value: 4 },
+                { label: "6", value: 6 },
+              ],
+            },
+          ],
         },
       ]
     },
@@ -42,7 +58,11 @@ export function createOperationPanel(version: string, services: Services): Panel
           status = "Wavelog account needs configuration: enter a public HTTPS URL and API v2 token in Settings → Accounts."
         }
       }
-      const menu = [{ label: "Test connection (read-only)", event: "test-connection" }]
+      const menu = [
+        { label: "Preview settings", settings: true as const },
+        { label: "Preview station-locations (local)", event: "preview" },
+        { label: "Test connection (read-only)", event: "test-connection" },
+      ]
       if (typeof operation.uuid !== "string" || operation.uuid.trim() === "") {
         return {
           kind: "markdown",
@@ -61,14 +81,44 @@ export function createOperationPanel(version: string, services: Services): Panel
           `QSOs: ${qsoCount}`,
           qsoCount === 0 ? "No contacts logged yet." : undefined,
           text(status, "Not connected"),
-          "Phase 2: read-only connection test. Uploads are not enabled.",
+          "Phase 3: local station-location preview. Uploads are not enabled.",
         ]
           .filter((line) => line !== undefined)
           .join("\n\n"),
         menu,
       }
     },
-    async onEvent({ event }, ctx) {
+    async onEvent({ event, operation, config }, ctx) {
+      if (event.controlId === "menu" && event.action === "preview" && !testing) {
+        testing = true
+        try {
+          if (!services.preview) throw new Error("Exporter unavailable")
+          const result = await previewOperation(operation, ctx, services.preview, config)
+          await services.showMessage({
+            presentation: "dialog",
+            title: "Local station-location preview",
+            text:
+              `${result.count} QSOs; ${result.groups.length} station-location combination(s). No Wavelog requests. Grid precision: ${result.precision}. Private/lookup data excluded.\n\n` +
+              result.groups
+                .slice(0, 50)
+                .map(
+                  (g) =>
+                    `${text(g.name, "Unnamed")} | ${g.count} QSOs\n${result.fields.map((field, i) => `${field}: ${text(g.values[i], "none")}`).join(" | ")}`,
+                )
+                .join("\n\n") +
+              (result.groups.length > 50 ? "\n\nShowing first 50 groups." : ""),
+          })
+        } catch (error) {
+          await services.showMessage({
+            presentation: "dialog",
+            title: "Preview failed",
+            text: error instanceof Error && error.name === "WavelogError" ? error.message : "Could not preview the local log.",
+          })
+        } finally {
+          testing = false
+        }
+        return { values: {} }
+      }
       if (event.controlId !== "menu" || event.action !== "test-connection" || testing) return { values: {} }
       testing = true
       try {

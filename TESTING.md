@@ -1,5 +1,59 @@
 # Device acceptance
 
+## Phase 3 — Local station-location preview
+
+- Artifact: `dist/ad8is-wavelog-0.1.0-alpha.4.h2kext`.
+- Manifest API 23; SDK/tools 1.26.0; app target v26.11.0 build 193.
+- Automated checks: 33 tests and typecheck passed, including segment boundaries,
+  frozen source contacts, power preservation, reference combinations, Unicode
+  ADIF lengths, preview settings, and actual bundled SDK delegation to the core
+  exporter. The delegate's output is simulated in automated tests: actual device
+  ADIF/activity integration remains the acceptance gate. Known official build
+  activation-preflight warning remains documented in README.
+- SHA-256: `8d2a76185f5fb4cf617935a4a9c7b19f3d9e0e751673a4da547563a207131f91`.
+- Archive integrity, official package validation, manifest and license asset
+  checks passed. Copied to the approved Nextcloud staging folder; the copied
+  checksum matches the build artifact.
+- Device result: pending human test. No Wavelog mutations are implemented.
+
+### Device checklist
+
+1. Install alpha.4 from the Nextcloud staging folder, preserving the existing
+   panel and account. The permissions are unchanged from Phase 2.
+2. Open a known SOTA+POTA operation. Panel menu → Preview station-locations
+   (local). Check the count, station callsign, grid, both refs and proposed SOTA
+   name against the original log and WaveRover dry-run on its Full ADIF export.
+   This does not use the SOTA/POTA website submission file selectors.
+3. On a test operation, add a BREAK changing grid/refs and contacts on each side.
+   Expect separate combinations; a contact at the boundary belongs to the later
+   segment. Return to the original combination and expect its group to gain the
+   additional contacts. A BREAK without changed identity creates no new group.
+4. Change power within one test location: the group remains one, and source QSO
+   power values remain unchanged. No upload is performed in this test.
+5. Open Preview settings. Try four-character grid precision and a different name
+   template using selected fields, then restore six characters and
+   `{MY_SOTA_REF}`. A blank template should use automatic naming. Check settings
+   survive reopening the app. Do not remove a naming field without also changing
+   its template; unsupported fields/settings should report a clear error.
+6. Test a POTA-only operation and a location with neither ref: expect automatic
+   fallback names. An empty operation should show zero QSOs/groups. Preview
+   should work without a Wavelog account and without internet if the app's
+   enabled activity exporters have their needed data available locally.
+7. Confirm no station or QSO was added in Wavelog. Preview is local; Test
+   connection is a separate action and remains available for the Phase 2 check.
+
+Report the OS/edition/build, first preview results and any error text, redacting
+private data. This milestone is intentionally a local preview: server matching,
+station creation and upload follow only after human acceptance.
+
+Suggested human milestone commit after review/device success:
+
+```sh
+git add -A
+git diff --cached
+git commit -S -m "feat: preview segment-aware station-location groups locally"
+```
+
 ## Phase 2 — Read-only Wavelog connection
 
 - Artifact: `dist/ad8is-wavelog-0.1.0-alpha.3.h2kext`.

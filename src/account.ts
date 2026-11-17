@@ -3,6 +3,7 @@ import { checkConnection, connectionSummary, WavelogError } from "./wavelog.ts"
 import type { Connection, Transport } from "./wavelog.ts"
 
 export type Services = {
+  preview?: import("./preview.ts").Exporter
   fetch: Transport
   saveSession: (session: Record<string, string>) => Promise<void>
   showMessage: (message: ResultMessage) => Promise<void>

@@ -1,8 +1,8 @@
 {
   "key": "ad8is-wavelog",
   "name": "AD8IS Wavelog",
-  "version": "0.1.0-alpha.3",
-  "description": "Read-only Wavelog API v2 connection test and operation details. Uploads not yet enabled.",
+  "version": "0.1.0-alpha.4",
+  "description": "Local station-location preview and read-only Wavelog connection testing.",
   "category": "dashboard",
   "api": 23,
   "icon": "file-upload-outline",

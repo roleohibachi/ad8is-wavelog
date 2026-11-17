@@ -1,7 +1,7 @@
-# Wavelog connection test
+# Wavelog local preview and connection test
 
 AD8IS Wavelog is an operation dashboard panel for Ham2K Halo / PoLo Next.
-This development version displays operation details and tests a public HTTPS
+This development version previews local station-location combinations and tests a public HTTPS
 Wavelog API v2 connection. It reads existing station-locations; station creation
 and QSO upload will come in later milestones.
 
@@ -21,3 +21,9 @@ Tailscale and plain HTTP installations are outside this version's scope.
 There are no automatic uploads or requests while the panel renders, and no
 companion server or change to Halo itself is required. This is an independent
 integration, not an official Wavelog or Ham2K release.
+
+Use the panel menu → Preview station-locations (local) for an account-free dry
+run of the operation. Preview settings control match fields, naming and grid
+precision. It uses Halo's full ADIF generator, not activity-specific award
+submission files. BREAK/START segments, explicit contact locations and per-QSO
+power are preserved; no Wavelog request is made by the preview.

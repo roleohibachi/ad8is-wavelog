@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import { test } from "node:test"
 import vm from "node:vm"
-import type { AccountHook, HookContext, PanelHook } from "@ham2k/extension-sdk"
+import type { AccountHook, HookContext, PanelHook, ExportRequest, ResultMessage } from "@ham2k/extension-sdk"
 
 test("built bundle renders without network and performs only explicit account reads through the SDK", async () => {
   const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"))
@@ -17,6 +17,8 @@ test("built bundle renders without network and performs only explicit account re
   let allowReads = false
   const requests: string[] = []
   const sessions: unknown[] = []
+  const messages: ResultMessage[] = []
+  const exportRequests: ExportRequest[] = []
   const token = "wl2_BUNDLE_TEST_TOKEN"
   const hostCall = async (method: string, params: Record<string, unknown>) => {
     if (!allowReads) unexpected()
@@ -30,6 +32,10 @@ test("built bundle renders without network and performs only explicit account re
     }
     if (method === "setAccountSession") {
       sessions.push(params.session)
+      return null
+    }
+    if (method === "showMessage") {
+      messages.push(params as unknown as ResultMessage)
       return null
     }
     assert.fail(`Unexpected host call: ${method}`)
@@ -52,6 +58,13 @@ test("built bundle renders without network and performs only explicit account re
         },
       ),
       hostCall,
+      invokeLocal: async (category: string, method: string, request: ExportRequest, _online: unknown, key: string) => {
+        assert.equal(category, "export")
+        assert.equal(method, "generateExport")
+        assert.equal(key, "adif")
+        exportRequests.push(request)
+        return [{ ok: true, value: { content: "<EOH><CALL:4>W1AW<STATION_CALLSIGN:7>AD8IS/P<MY_GRIDSQUARE:6>EM89AB<MY_SOTA_REF:10>W8O/SE-004<EOR>" } }]
+      },
       getAccountKvKey: (key: string) => key,
     },
   })
@@ -106,4 +119,20 @@ test("built bundle renders without network and performs only explicit account re
   assert.deepEqual(requests, ["https://log.example.org/api/v2/token", "https://log.example.org/api/v2/station"])
   assert.equal(sessions.length, 1)
   assert.ok(!JSON.stringify(sessions).includes(token))
+  const before = requests.length
+  await hook.onEvent!(
+    {
+      panelKey: descriptor.key,
+      operation: { uuid: "op", stationCall: "AD8IS/P", grid: "EM89AB" },
+      qsoCount: 1,
+      config: {},
+      reason: "initial",
+      event: { controlId: "menu", action: "preview", phase: "activate", sequence: 1 },
+    },
+    { online: false, getQsos: async () => [{ band: "20m", their: { call: "W1AW" } }] },
+  )
+  assert.equal(requests.length, before)
+  assert.equal(exportRequests.length, 1)
+  assert.equal(exportRequests[0].includePrivateData, false)
+  assert.match(messages[0].text, /1 QSOs; 1 station-location/)
 })

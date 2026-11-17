@@ -56,7 +56,11 @@ test("panel rendering reads saved summary but does not initiate network or stora
   if (content.kind !== "markdown") assert.fail("Expected Markdown")
   assert.match(content.content, /Last successful test/)
   assert.ok(!content.content.includes(token))
-  assert.deepEqual(content.menu, [{ label: "Test connection (read-only)", event: "test-connection" }])
+  assert.deepEqual(content.menu, [
+    { label: "Preview settings", settings: true },
+    { label: "Preview station-locations (local)", event: "preview" },
+    { label: "Test connection (read-only)", event: "test-connection" },
+  ])
   assert.deepEqual([requests.length, sessions.length, messages.length], [0, 0, 0])
 })
 

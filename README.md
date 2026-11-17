@@ -1,22 +1,21 @@
 # AD8IS Wavelog
 
-A Halo / Ham2K PoLo Next extension. **Phase 2 adds read-only Wavelog API v2
-connectivity** to the operation panel. It retains the operation name/ID,
-station callsign, contact count and automatic refresh from Phase 1. It uses
-Halo's standard Markdown rendering and theme.
+A Halo / Ham2K PoLo Next extension. **Phase 3 adds a local station-location
+preview**, retaining operation details and the read-only API v2 connection test.
+The panel uses Halo's standard Markdown rendering and theme.
 
 There is no station-location creation or QSO upload yet. Those follow the
 human-reviewed phases in [PLAN.md](PLAN.md). The existing WaveRover wrapper is
 unaffected.
 
 The operation dashboard panel is the intended final interface. Later milestones
-add Preview, Upload and results there using existing Halo extension APIs, without
+add Upload and server reconciliation there using existing Halo extension APIs, without
 changes to Halo itself. Optional live upload is a possible later phase, not part
 of this release; the panel can then display connection, queue and error status.
 
 ## Install and try
 
-The built file is `dist/ad8is-wavelog-0.1.0-alpha.3.h2kext`. Copy it to your
+The built file is `dist/ad8is-wavelog-0.1.0-alpha.4.h2kext`. Copy it to your
 device using your normal file-transfer workflow. In Halo open **Settings →
 Extensions & Features → Install from file…**, choose it, and enable AD8IS
 Wavelog if needed. In an operation view's layout editor, add the **Wavelog**
@@ -45,6 +44,40 @@ permissions for later uploads with lookup enabled: `station:write`, `qso:write`,
 scopes does not prevent a successful read-only test. They are inspected as token
 metadata; no write requests are made to test them. Legacy keys are not supported
 in this milestone.
+
+## Local station-location preview
+
+Open the panel menu → **Preview station-locations (local)**. No Wavelog account
+is required for preview. It reads the operation's local contacts and BREAK/START
+events, resolves each segment against the base operation, and copies missing
+location defaults onto exported contacts while preserving their own explicit
+location and power. It delegates to Halo's **full ADIF generator**, not the
+SOTA/POTA award-submission export options. Those activity extensions contribute
+reference fields to full ADIF through their standard hooks.
+
+The result shows contact counts, station combinations and proposed names. It
+makes no Wavelog API requests and does not check existing stations or duplicates.
+A return to the same combination reuses one group; a power change does not split
+it. Missing and present references remain distinct. Comma/semicolon-separated
+reference lists are trimmed, uppercased, deduplicated and sorted for identity.
+
+**Preview settings** in the panel menu edits this panel placement's match fields,
+name format and grid precision. Defaults match the working WaveRover wrapper:
+`STATION_CALLSIGN,MY_GRIDSQUARE,MY_SOTA_REF,MY_POTA_REF`, `{MY_SOTA_REF}`, and six
+characters. Four-character grids are also supported. Callsign and grid remain
+mandatory match fields, and power is deliberately unsupported as identity.
+Every naming placeholder must refer to a selected field; a blank template or
+blank expanded result uses automatic naming. Settings for lookup/ITU fallback
+will arrive with station creation, where they have an effect.
+
+The preview explicitly excludes private notes and lookup-derived data and caps
+grid precision at six characters. It does not silently inherit a user's private
+backup export settings. Confirm displayed grids against the original log. When
+an export fails, changes the record count, omits a known SOTA/POTA activation
+reference, or lacks callsign/grid, preview stops with an error. Display is capped
+at 50 groups, while the total covers the entire operation. Exports require a
+single resolved callsign per contact; unresolved multi-call forms are rejected.
+The source operation and contacts are never modified.
 
 ## Network permission and limits
 
