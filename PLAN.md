@@ -1,21 +1,138 @@
 # Halo Wavelog extension: phased implementation
 
-## Publication paused pending Halo's QSO service integration
+## Migration to Halo's native QSO transfer
 
-Sebastian (KI2D), Ham2K's lead developer, says he is working on a new extension
-system for pushing QSOs to other services, with pulling planned as well. He
-expects it to make the Wavelog integration smoother, but it will require changes
-to this extension's code and a different UI. He asked to hold off on approving
-the extension until the new system is working; his estimate was about a week.
-This is an estimate, not a release commitment.
+Sebastian (KI2D) asked to hold catalog approval for the new QSO service
+integration. [Halo commit ba47fdf](https://github.com/ham2k/halo/commit/ba47fdf495d94b08463450a0fa696007336692be)
+implements push through API 28 behind the private `EXP PUSH` experiment.
+The native entry point is the operation's **Exports → Sync & Push to Services**.
+Pull is described in the design. Keep using alpha.9 privately while validating
+the replacement, then revisit catalog submission with Sebastian.
 
-The human will follow up with Sebastian on where to find the new implementation
-and documentation when ready. Until then, hold off on catalog submission and
-approval. The existing extension can continue to be used privately. Once the
-new system is available, assess its API and migration path, including how it
-handles changed QSOs, and retain the independently useful station-location
-grouping, matching, Wavelog client and tests where appropriate. Do not assume
-the new push/pull system automatically solves edit synchronization.
+### 1. Verify the host and register a service
+
+- Target an installable PoLo build containing the commit or equivalent API 28
+  support. The commit's source declares build 195, which is not proof that an
+  installed build contains the change. Record the actual app build and SHA and
+  check that `EXP PUSH` exposes the native section. Verify availability of
+  SDK/tools 1.28.0, the versions declared in the commit, and pin versions that
+  build and pack the `transfer` hook.
+- Preserve the extension key and account fields. Verify that an installed
+  upgrade retains the URL and token. Check the behavior of switching Wavelog
+  servers or accounts before assigning a destination ID. Use a durable,
+  non-secret ID scoped to the server and account, independent of token
+  rotation and station selection. If the API cannot identify the account
+  reliably, use an explicitly configured destination identity.
+- Register `transfer` alongside `account`. Offer one destination per configured
+  Wavelog account without a callsign filter, and one operation push suggestion
+  using `notSentTo`. This lets Halo select all callsigns while keeping the same
+  transfer history if the station identity changes. Test row discovery with
+  synthetic responses before enabling live writes.
+
+### 2. Preserve station routing and prove the payload
+
+- Halo selects QSOs, prepares full ADIF per UUID, sends chunks of up to 25
+  contacts for one station callsign, and writes transfer results. Route each
+  received record to a Wavelog station using the existing structured matching
+  rules. Keep callsign, grid precision and activation references in the
+  identity and power per QSO. One host chunk can still contain several station
+  identities. Fail an affected contact on missing fields, ambiguity, or
+  unexpected multiple ADIF records for one UUID.
+- Compare the new host's ADIF with alpha.9 using on-device fixtures for
+  BREAK/START, portable calls, explicit per-QSO locations, SOTA/POTA and power.
+  The commit's native export enables lookup enrichment. Its full payload
+  supports private-data exclusion and an `omit` list, but it supplies no
+  lookup-data switch. Verify an explicit payload policy before a live push.
+  If `omit` cannot preserve the privacy and routing contract together, discuss
+  a payload option with Sebastian before release.
+- Start with existing stations. Keep the dashboard for station preview and
+  explicitly confirmed creation while testing the native flow. Missing
+  stations should produce an actionable result directing the operator to that
+  setup step. Move normalization and match settings into storage shared
+  by both hooks. Verify how existing panel settings can be carried forward,
+  and document any values that need re-entry. Once native upload is validated,
+  remove the dashboard's duplicate upload action and keep only the station
+  management entry point the new workflow needs.
+
+### Station creation preflight in Export Logs
+
+Alpha.12 reached the native push hook on the phone. The new activation
+reported 26 contacts needing a station-location. The agreed flow is one
+review from **Export Logs → Push**, before Halo starts sending contacts.
+The transfer API on Halo main as checked on November 25, 2026 has discovery
+and per-chunk push hooks. An operation-wide preflight needs a host API change.
+
+Propose an optional transfer hook that Halo calls once after the operator
+taps **Push**, with the destination, operation scope, and the selected
+contact records or sufficient ADIF station identity data for all segments.
+Give it an interactive lifetime separate from the 60-second deadline for
+each batch. Let the hook return ready, cancelled, or a message explaining
+what blocks the push.
+
+Reuse the existing matching and station creation review. Group the missing
+locations by identity, show each once with editable metadata, and write
+locations only after approval. Recheck the destination, selected contacts
+and station matches before the first QSO write. If an approved station was
+created before a later step failed or was cancelled, report that station
+and leave the QSOs pending. Put a preflight failure on the service row once
+instead of repeating it for each QSO.
+
+Verify with the reported 26-contact case, a mixed-location activation,
+cancellation, and a review that takes more than one minute. Until a host
+callback is available, the dashboard's creation action can prepare locations
+for the native push.
+
+### 3. Return trustworthy results by contact UUID
+
+- Prototype Wavelog API v2 single-QSO JSON create. It can return an inserted
+  Wavelog ID. Prove ADIF-to-JSON parity, especially frequency conversion from
+  MHz to Hz, activation fields, time, power, and the JSON create path's
+  external export behavior. Treat the current bulk ADIF summary as aggregate
+  only. A mixed batch summary cannot identify which Halo contacts succeeded.
+- Verify retry behavior on the deployed Wavelog version. A lost create
+  response or migration from alpha.9 can leave the contact present in Wavelog
+  without a Halo transfer record. The import duplicate check uses callsign,
+  UTC minute, band, normalized mode and station ID. That check alone cannot
+  establish which remote record belongs to the Halo UUID. Use a server-backed
+  client identity if supported, or investigate an exact, uniquely verified
+  reconciliation with `qso:read`. Leave ambiguous contacts and edited
+  pre-migration uploads for manual reconciliation.
+- Return an ID only for a confirmed association, and report a redacted error
+  for each refused, uncertain or unattempted UUID. Choose request timeouts and
+  a chunk budget below Halo's one-minute deadline. A thrown or timed-out hook
+  loses the bookkeeping for the entire chunk, including any earlier writes.
+  Preserve confirmed results on a partial failure, stop further sends on an
+  uncertain write, and verify how later host chunks behave before enabling
+  live use. Never replay a contact with an uncertain result based on the
+  absence of a local ID alone.
+
+### 4. Keep updates and deletes as separate work
+
+Ship new-contact push first. Halo can detect edits and pass a saved remote ID
+back with `changedSince`, but Wavelog edits still need a deliberate PATCH
+policy. Test ownership, remote edits, supported field changes including
+station moves, and conflicts before enabling that suggestion. Halo can send
+deletion requests with the same suggestion. Keep deletion disabled and report
+that request as unsupported if received. A later explicit deletion feature
+needs its own consent and `qso:delete` scope. Retain the warning about editing
+previously exported contacts until the supported update path is clear.
+
+### Verification and release
+
+Test service discovery, destination stability on token rotation and isolation
+on account/server changes, station routing, partial failure, duplicate ambiguity,
+lost responses, and chunk deadlines with fixtures. On a compatible phone,
+use a disposable Wavelog logbook to verify account upgrade, a native push to
+existing stations, a missing station, a repeat push, and an alpha.9 contact
+with no Halo transfer history. Confirm stored IDs and user-visible pending and
+failed states. Halo may mark the operation processed after a successful push,
+so include this in the device check and docs. Package a new prerelease for human
+review and commit, and revisit catalog submission after the device gate.
+
+Upstream references at the reviewed commit include the
+[transfer hook documentation](https://github.com/ham2k/halo/blob/ba47fdf495d94b08463450a0fa696007336692be/docs/extensions/import-export.md#transfer),
+[host push service](https://github.com/ham2k/halo/blob/ba47fdf495d94b08463450a0fa696007336692be/app/lib/services/transfer_service.dart),
+and [transfer design](https://github.com/ham2k/halo/blob/ba47fdf495d94b08463450a0fa696007336692be/docs/design/transfer.md).
 
 Status: plan reviewed and initially committed by the human. Phase 1 was
 implemented as `0.1.0-alpha.1`, installed by the human and committed as
@@ -33,10 +150,9 @@ performed by the assistant. Work lives under `./dev`.
 
 Phase 1 device feedback: the human installed `0.1.0-alpha.1` successfully and
 confirmed the panel is visible in an operation. Remaining checklist items are
-unreported. The human has selected the operation dashboard panel as the final
-UI: this project is an extension only and must not require upstream Halo changes
-or a new export/action hook. See TESTING.md for authorized Nextcloud artifact
-staging.
+unreported. The operation dashboard is alpha.9's interface. The native
+transfer migration above supersedes it as the planned upload entry point.
+See TESTING.md for authorized Nextcloud artifact staging.
 
 ## Outcome and scope
 
@@ -54,11 +170,12 @@ Browser builds, continuous sync, bidirectional edits/deletions, private-network
 servers, and HTTP servers are outside the first release.
 
 The extension key will be `ad8is-wavelog`, matching the user's callsign. UI is
-plain and functional, using an operation dashboard panel with standard Halo
-controls/forms for Preview, Upload and results. The panel is the final entry
-point, not a workaround pending upstream changes. Network writes
-must never happen from panel rendering, export-option discovery, or log-save
-hooks. The alpha.9 panel schedules read-only station checks when visible. Changing a log should not unexpectedly upload it.
+plain and functional. Alpha.9 uses an operation dashboard with standard Halo
+controls for preview, upload and results. The migration moves uploads to the
+native Exports section. Network writes must never happen from panel rendering,
+export-option discovery, or log-save hooks. The alpha.9 panel schedules
+read-only station checks when visible. Changing a log should not unexpectedly
+upload it.
 
 The panel can later show an opt-in live-upload mode, connection/queue status,
 last successful upload and per-contact failures. Keep transport, station matching

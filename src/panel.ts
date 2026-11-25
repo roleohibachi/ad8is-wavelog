@@ -58,6 +58,7 @@ export function createOperationPanel(_version: string, services: Services): Pane
         { label: "Compare with Wavelog (read-only)", event: "compare" },
         { label: "Create missing station-location… (no QSOs)", event: "create" },
         { label: "Test connection (read-only)", event: "test-connection" },
+        ...(services.reviewPendingPush ? [{ label: "Review paused push…", event: "review-push" }] : []),
       ]
       const validOperation = typeof operation.uuid === "string" && operation.uuid.trim() !== ""
       // Keys stay in memory only; never show credentials in the scene or errors.
@@ -150,6 +151,11 @@ export function createOperationPanel(_version: string, services: Services): Pane
       }
     },
     async onEvent({ event, operation, config }, ctx) {
+      if (event.controlId === "menu" && event.action === "review-push" && services.reviewPendingPush) {
+        const message = await services.reviewPendingPush()
+        await services.showMessage({ presentation: "dialog", title: "Wavelog push", text: message })
+        return { values: {} }
+      }
       if (["menu", "upload"].includes(event.controlId) && event.action === "upload" && !testing) {
         testing = true
         const label = String(operation.title ?? operation.uuid ?? "operation")
@@ -315,7 +321,10 @@ export function createOperationPanel(_version: string, services: Services): Pane
       check = undefined
       return { values: {} }
     }
-    if (!["menu", "upload"].includes(args.event.controlId) || !["preview", "compare", "test-connection", "create", "upload"].includes(args.event.action))
+    if (
+      !["menu", "upload"].includes(args.event.controlId) ||
+      !["preview", "compare", "test-connection", "create", "upload", "review-push"].includes(args.event.action)
+    )
       return { values: {} }
     if (queued || testing) return { values: {} }
     if (!services.schedule) return execute(args, ctx)

@@ -1,3 +1,4 @@
+import { createTransfer } from "../src/transfer.ts"
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import type { HookContext } from "@ham2k/extension-sdk"
@@ -15,10 +16,7 @@ function fixture() {
   const calls: { url: string; method: string; body?: string }[] = []
   const forms: unknown[] = []
   let created = false
-  const answers: (Record<string, unknown> | null)[] = [
-    { group: 0, lookup: false },
-    { name: "W8O/SE-004, US-5450, EM89AB", dxcc: 291, cq: 5, itu: 8, confirm: true },
-  ]
+  const answers: (Record<string, unknown> | null)[] = [{ name: "W8O/SE-004, US-5450, EM89AB", dxcc: 291, cq: 5, itu: 8, confirm: true }]
   const services: Services = {
     preview: async () => "<EOH><CALL:4>W1AW<STATION_CALLSIGN:7>AD8IS/P<MY_GRIDSQUARE:6>EM89AB<MY_SOTA_REF:10>W8O/SE-004<MY_POTA_REF:7>US-5450<EOR>",
     form: async (form, state) => {
@@ -50,7 +48,7 @@ test("reviewed creation posts station once, preserves logbook links and never im
   const { services, calls, forms } = fixture()
   const result = await createLocation(services, op, {}, context)
   assert.match(result, /Created station ID 9/)
-  assert.equal(forms.length, 2)
+  assert.equal(forms.length, 1)
   const mutations = writes(calls)
   assert.equal(mutations.length, 2)
   const payload = JSON.parse(mutations[0].body!)
@@ -94,7 +92,7 @@ test("upload button reviews a missing station before a separate QSO confirmation
     },
     context,
   )
-  assert.equal(f.forms.length, 3)
+  assert.equal(f.forms.length, 2)
   assert.deepEqual(
     writes(f.calls).map((call) => call.url.split("/").pop()),
     ["station", "2", "qso"],
@@ -149,9 +147,9 @@ test("upload permission is checked before the button creates a station", async (
 })
 
 test("cancellation or an unchecked confirmation never writes", async () => {
-  for (const answers of [[null], [{ group: 0, lookup: false }, null], [{ group: 0, lookup: false }, { confirm: false }]]) {
+  for (const answers of [[null], [{ confirm: false }]]) {
     const fixture1 = fixture()
-    fixture1.answers.splice(0, 2, ...answers)
+    fixture1.answers.splice(0, fixture1.answers.length, ...answers)
     assert.match(await createLocation(fixture1.services, op, {}, context), /cancelled/)
     assert.equal(writes(fixture1.calls).length, 0)
   }
@@ -159,20 +157,32 @@ test("cancellation or an unchecked confirmation never writes", async () => {
 
 test("invalid required metadata blocks mutation after review", async () => {
   const f = fixture()
-  f.answers[1] = { ...f.answers[1], itu: 0 }
+  f.answers[0] = { ...f.answers[0], itu: 0 }
   await assert.rejects(createLocation(f.services, op, {}, context), /ITU zone/)
   assert.equal(writes(f.calls).length, 0)
 })
 
-test("optional lookup fills missing DXCC/CQ but does not invent ITU", async () => {
+test("lookup fills missing DXCC/CQ and leaves ITU blank when Wavelog omits it", async () => {
   const f = fixture()
-  f.answers[0] = { group: 0, lookup: true }
   await createLocation(f.services, op, {}, context)
-  const review = f.forms[1] as { state: Record<string, unknown> }
+  const review = f.forms[0] as { state: Record<string, unknown> }
   assert.equal(review.state.dxcc, "291")
   assert.equal(review.state.cq, "5")
   assert.equal(review.state.itu, "")
   assert.equal(f.calls.filter((c) => c.url.includes("lookup?")).length, 1)
+})
+
+test("full lookup supplies an editable ITU suggestion when only that field is missing", async () => {
+  const f = fixture()
+  const preview = f.services.preview!
+  const fetch = f.services.fetch
+  f.services.preview = async (request) => (await preview(request)).replace("<EOR>", "<MY_DXCC:3>291<MY_CQ_ZONE:1>4<EOR>")
+  f.services.fetch = async (url, options) => (url.endsWith("&detail=full") ? response({ dxcc_id: 291, dxcc_cqz: 5, dxcc_ituz: 8 }) : fetch(url, options))
+  f.answers[0] = null
+  await createLocation(f.services, op, {}, context)
+  const review = f.forms[0] as { state: Record<string, unknown> }
+  assert.deepEqual([review.state.dxcc, review.state.cq, review.state.itu], ["291", "4", "8"])
+  assert.equal(writes(f.calls).length, 0)
 })
 
 test("an existing match is reused without forms or mutations", async () => {
@@ -261,10 +271,9 @@ test("changed or unavailable local snapshot blocks creation after forms", async 
 test("lookup failure still offers a manual metadata form", async () => {
   const f = fixture(),
     fetch = f.services.fetch
-  f.answers[0] = { group: 0, lookup: true }
   f.services.fetch = async (url, options) => (url.includes("lookup?") ? { status: 500, body: "failure" } : fetch(url, options))
   assert.match(await createLocation(f.services, op, {}, context), /Created station ID 9/)
-  const form = f.forms[1] as { form: { elements: unknown[] } }
+  const form = f.forms[0] as { form: { elements: unknown[] } }
   assert.match(JSON.stringify(form), /lookup failed/)
 })
 
@@ -280,12 +289,48 @@ test("source metadata prepopulates the form and is not overwritten by lookup", a
   const f = fixture(),
     preview = f.services.preview!
   f.services.preview = async (request) => (await preview(request)).replace("<EOR>", "<MY_DXCC:3>291<MY_CQ_ZONE:1>4<MY_ITU_ZONE:1>8<EOR>")
-  f.answers[0] = { group: 0, lookup: true }
   await createLocation(f.services, op, {}, context)
-  const review = f.forms[1] as { state: Record<string, unknown> }
+  const review = f.forms[0] as { state: Record<string, unknown> }
   assert.deepEqual([review.state.dxcc, review.state.cq, review.state.itu], ["291", "4", "8"])
   assert.equal(
     f.calls.some((c) => c.url.includes("lookup?")),
     false,
+  )
+})
+
+test("native Push creates a missing location and stops before sending QSOs", async () => {
+  const f = fixture()
+  const fetch = f.services.fetch
+  const transfer = createTransfer({
+    ...f.services,
+    fetch: (url, options) =>
+      url.endsWith("/token") ? Promise.resolve(response({ id: 1, user_id: 2, scopes: [...scopes, "qso:write"] })) : fetch(url, options),
+    readPending: async () => null,
+    writePending: async () => assert.fail("No QSO write expected"),
+  })
+  const [destination] = await transfer.suggestDestinations(
+    { service: "wavelog", scope: { kind: "operation", operation: op }, stationCalls: ["AD8IS/P"] },
+    context,
+  )
+  const adif = await f.services.preview!({} as Parameters<NonNullable<Services["preview"]>>[0])
+  await assert.rejects(
+    transfer.push!(
+      {
+        service: "wavelog",
+        destination,
+        stationCall: "AD8IS/P",
+        records: [
+          { uuid: "one", adif: [adif] },
+          { uuid: "two", adif: [adif] },
+        ],
+      },
+      context,
+    ),
+    /Created station ID 9.*Tap Push again/,
+  )
+  assert.equal(f.forms.length, 1)
+  assert.deepEqual(
+    writes(f.calls).map(({ method }) => method),
+    ["POST", "PATCH"],
   )
 })

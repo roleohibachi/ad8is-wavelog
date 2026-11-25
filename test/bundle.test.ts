@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import { test } from "node:test"
 import vm from "node:vm"
-import type { AccountHook, HookContext, PanelHook, ExportRequest, ResultMessage } from "@ham2k/extension-sdk"
+import type { AccountHook, HookContext, PanelHook, ExportRequest, ResultMessage, TransferHook } from "@ham2k/extension-sdk"
 
 test("built bundle renders without network and performs only explicit account reads through the SDK", async () => {
   const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"))
@@ -12,9 +12,12 @@ test("built bundle renders without network and performs only explicit account re
     version: string
     onActivation: (api: unknown) => void | Promise<void>
   }[] = []
-  const registrations: { category: string; key: string; hook: PanelHook | AccountHook }[] = []
+  const registrations: { category: string; key: string; hook: PanelHook | AccountHook | TransferHook }[] = []
   const unexpected = () => assert.fail("Rendering/activation must not call the host or schedule work")
   let allowReads = false
+  let nativePush = false
+  let pendingPush: unknown = null
+  let posts = 0
   const requests: string[] = []
   const timers: (() => unknown)[] = []
   const sessions: unknown[] = []
@@ -23,12 +26,33 @@ test("built bundle renders without network and performs only explicit account re
   const token = "wl2_BUNDLE_TEST_TOKEN"
   const hostCall = async (method: string, params: Record<string, unknown>) => {
     if (!allowReads) unexpected()
+    if (method === "getSettings") return { extensions: { "extension_ad8is-wavelog": { pendingPush } } }
+    if (method === "setSettings") {
+      pendingPush = (params.values as Record<string, unknown>).pendingPush
+      return null
+    }
     if (method === "fetch") {
+      if (params.method === "POST") {
+        assert.ok(nativePush)
+        const body = JSON.parse(String(params.body))
+        assert.equal(body.station_profile_id, 7)
+        assert.equal(body.freq, 14062000)
+        assert.equal(body.name, undefined)
+        assert.equal(body.comment, undefined)
+        assert.ok(pendingPush)
+        posts++
+        if (posts === 2) throw new Error("Connection lost after POST")
+        return { status: 201, body: JSON.stringify({ data: { id: 91 } }) }
+      }
       assert.equal(params.method, "GET")
       assert.equal((params.headers as Record<string, string>).Authorization, `Bearer ${token}`)
       const url = String(params.url)
       requests.push(url)
-      const data = url.endsWith("/token") ? { id: 1, scopes: ["station:read"] } : []
+      const data = url.endsWith("/token")
+        ? { id: 1, user_id: 2, scopes: nativePush ? ["station:read", "qso:write"] : ["station:read"] }
+        : nativePush
+          ? [{ id: 7, name: "Summit", callsign: "AD8IS", gridsquare: "EM89AB", sota: "", pota: "" }]
+          : []
       return { status: 200, body: JSON.stringify({ data }) }
     }
     if (method === "setAccountSession") {
@@ -83,11 +107,11 @@ test("built bundle renders without network and performs only explicit account re
       },
       clear: unexpected,
     },
-    registerHook: (category: string, registration: { key: string; hook: PanelHook | AccountHook }) => {
+    registerHook: (category: string, registration: { key: string; hook: PanelHook | AccountHook | TransferHook }) => {
       registrations.push({ category, ...registration })
     },
   })
-  assert.equal(registrations.length, 2)
+  assert.equal(registrations.length, 3)
   assert.equal(registrations[0].category, "panel")
   assert.equal(registrations[0].key, manifest.key)
   assert.deepEqual(
@@ -95,7 +119,7 @@ test("built bundle renders without network and performs only explicit account re
     registrations.map(({ category }) => category),
   )
   assert.deepEqual(manifest.domains, ["*"])
-  assert.equal(manifest.api, 23)
+  assert.equal(manifest.api, 28)
   assert.equal(manifest.webSockets, undefined)
   assert.equal(
     Object.keys(manifest).some((key) => key.startsWith("requires")),
@@ -118,7 +142,47 @@ test("built bundle renders without network and performs only explicit account re
   assert.match(JSON.stringify(content), /Upload new QSOs/)
   assert.match(JSON.stringify(content), /QSO EDITS ARE NOT SYNCED/)
   assert.equal(requests.length, 0)
+  const transfer = registrations.find(({ category }) => category === "transfer")!.hook as TransferHook
+  const scope = { kind: "operation" as const, operation: { uuid: "op" } }
+  const transferContext = { online: true, account: { credentials: { url: "https://log.example.org", token } } }
+  const args = { service: "wavelog", scope, stationCalls: ["AD8IS", "AD8IS/P"] }
+  const [suggestion] = await transfer.suggestPushes!({ scope }, transferContext)
+  assert.equal(suggestion.service, "wavelog")
+  assert.equal(suggestion.select.notSentTo, "wavelog")
+  await assert.rejects(transfer.suggestDestinations(args, { online: true }), /Configure Wavelog/)
   allowReads = true
+  nativePush = true
+  const [destination] = await transfer.suggestDestinations(args, transferContext)
+  assert.equal(destination.stationCall, undefined)
+  assert.ok(!JSON.stringify(destination).includes(token))
+  const records = [
+    {
+      uuid: "new",
+      adif: [
+        "<CALL:4>W1AW<QSO_DATE:8>20261125<TIME_ON:6>120000<BAND:3>20m<MODE:2>CW<FREQ:6>14.062<STATION_CALLSIGN:5>AD8IS<MY_GRIDSQUARE:6>EM89AB<NAME:4>Test<COMMENT:4>Test<EOR>",
+      ],
+    },
+    { uuid: "edit", id: "12", adif: ["<CALL:4>W2AW<EOR>"] },
+    { uuid: "deleted", id: "13", deleted: true, adif: [] },
+  ]
+  const outcomes = await transfer.push!({ service: "wavelog", stationCall: "AD8IS", destination, records }, transferContext)
+  assert.deepEqual(
+    Array.from(outcomes, ({ uuid }) => uuid),
+    records.map(({ uuid }) => uuid),
+  )
+  assert.equal(outcomes[0].id, "91")
+  assert.equal(pendingPush, null)
+  assert.ok(outcomes.slice(1).every(({ error }) => error?.includes("not supported")))
+  const failure = await transfer.push!(
+    { service: "wavelog", stationCall: "AD8IS", destination, records: [{ ...records[0], uuid: "uncertain" }] },
+    transferContext,
+  )
+  assert.match(failure[0].error!, /uncertain/)
+  const retry = await transfer.push!({ service: "wavelog", stationCall: "AD8IS", destination, records: [records[0]] }, transferContext)
+  assert.match(retry[0].error!, /unresolved/)
+  assert.equal(posts, 2)
+  nativePush = false
+  requests.length = 0
   assert.equal(registrations[1].category, "account")
   const account = registrations[1].hook as AccountHook
   const result = await account.testCredentials({ url: "https://log.example.org", token }, { online: true })

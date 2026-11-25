@@ -3,6 +3,7 @@ import { checkConnection, connectionSummary, WavelogError } from "./wavelog.ts"
 import type { Connection, Transport } from "./wavelog.ts"
 
 export type Services = {
+  reviewPendingPush?: () => Promise<string>
   schedule?: (task: () => Promise<void>) => void
   form?: (definition: import("@ham2k/extension-sdk").FormDefinition, state?: Record<string, unknown>) => Promise<Record<string, unknown> | null>
   preview?: import("./preview.ts").Exporter

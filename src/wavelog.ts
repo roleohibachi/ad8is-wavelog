@@ -65,7 +65,7 @@ export async function apiRequest(
   method: "GET" | "POST" | "PATCH" = "GET",
   payload?: Record<string, unknown>,
 ): Promise<unknown> {
-  if (!/^(token|station(?:\/[1-9]\d*)?|logbook(?:\/[1-9]\d*)?|qso|lookup\?callsign=[^&]+&detail=basic)$/.test(resource))
+  if (!/^(token|station(?:\/[1-9]\d*)?|logbook(?:\/[1-9]\d*)?|qso|lookup\?callsign=[^&]+&detail=(?:basic|full))$/.test(resource))
     throw new WavelogError("Unsupported API resource.")
   let response: { status: number; body: string }
   try {
@@ -105,7 +105,7 @@ export async function apiRequest(
         Array.isArray(details.duplicate) &&
         Array.isArray(details.critical) &&
         Array.isArray(details.validation) &&
-        details.critical.length + details.validation.length > 0
+        details.critical.length + details.validation.length + details.duplicate.length > 0
       ) {
         throw new WavelogError("Wavelog rejected the batch without importing contacts. Raw validation messages are withheld.", 400, details.duplicate.length)
       }

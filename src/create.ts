@@ -22,9 +22,24 @@ export async function createLocation(
   config: Record<string, JSONValue>,
   ctx: HookContext,
 ): Promise<string> {
-  if (!services.preview || !services.form) throw new WavelogError("The creation form/exporter is unavailable.")
+  const readPreview = async (refresh: boolean) => {
+    if (!services.preview) throw new WavelogError("The creation exporter is unavailable.")
+    const current = refresh ? await ctx.getOperation?.(String(operation.uuid)) : operation
+    if (!current) throw new WavelogError("Could not re-read the operation. No station was created.")
+    return previewOperation(current, ctx, services.preview, config)
+  }
+  return createFromPreview(services, config, ctx, readPreview)
+}
+
+export async function createFromPreview(
+  services: Pick<Services, "fetch" | "form">,
+  config: Record<string, JSONValue>,
+  ctx: HookContext,
+  readPreview: (refresh: boolean) => ReturnType<typeof previewOperation>,
+): Promise<string> {
+  if (!services.form) throw new WavelogError("The station creation form is unavailable.")
   const credentials = credentialsOf(ctx.account?.credentials)
-  const preview = await previewOperation(operation, ctx, services.preview, config)
+  const preview = await readPreview(false)
   const connection = await checkConnection(services.fetch, ctx.account?.credentials)
   for (const scope of ["station:write", "logbook:read", "logbook:write"])
     if (connection.missingUploadScopes.includes(scope)) throw new WavelogError(`Creating and linking a station requires ${scope}. No station was created.`)
@@ -32,19 +47,20 @@ export async function createLocation(
   const candidates = compared.filter((item) => item.status === "new")
   if (!candidates.length)
     return "No safely identifiable new station-locations to create. Existing locations are reused; resolve any ambiguous or blocked results in Compare first. No QSOs were imported."
-  const choice = await services.form(
-    {
-      title: "Choose a new station-location",
-      subtitle: "No changes yet. Creation imports no QSOs.",
-      elements: [
-        { type: "field", fieldType: "select", key: "group", label: "Location", options: candidates.map((item, i) => ({ label: item.group.name, value: i })) },
-        { type: "field", fieldType: "checkbox", key: "lookup", label: "Look up missing DXCC/CQ from the station callsign (read-only)" },
-      ],
-    },
-    { group: 0, lookup: true },
-  )
-  if (!choice) return "Creation cancelled. No changes made."
-  const index = integer(choice.group, 0, candidates.length - 1, "Location choice")
+  let index = 0
+  if (candidates.length > 1) {
+    const choice = await services.form(
+      {
+        title: "Choose a new station-location",
+        elements: [
+          { type: "field", fieldType: "select", key: "group", label: "Location", options: candidates.map((item, i) => ({ label: item.group.name, value: i })) },
+        ],
+      },
+      { group: 0 },
+    )
+    if (!choice) return "Creation cancelled. No changes made."
+    index = integer(choice.group, 0, candidates.length - 1, "Location choice")
+  }
   const group = candidates[index].group
   const payload: Record<string, unknown> = {}
   preview.fields.forEach((field, i) => {
@@ -54,16 +70,28 @@ export async function createLocation(
   })
   const metadata = { ...group.metadata }
   const notes: string[] = []
-  if (choice.lookup === true && (!metadata.MY_DXCC || !metadata.MY_CQ_ZONE)) {
+  if (!metadata.MY_DXCC || !metadata.MY_CQ_ZONE || (!metadata.MY_ITU_ZONE && !config.ituFallback)) {
     if (connection.missingUploadScopes.includes("lookup:read")) notes.push("Lookup is unavailable: token lacks lookup:read. Enter metadata manually.")
     else {
       try {
-        const data = object(await apiRequest(services.fetch, credentials, `lookup?callsign=${encodeURIComponent(String(payload.callsign))}&detail=basic`))
-        if (!metadata.MY_DXCC && Number.isInteger(Number(data.dxcc_id)) && Number(data.dxcc_id) > 0 && Number(data.dxcc_id) <= 999)
-          metadata.MY_DXCC = String(data.dxcc_id)
-        if (!metadata.MY_CQ_ZONE && Number.isInteger(Number(data.dxcc_cqz)) && Number(data.dxcc_cqz) > 0 && Number(data.dxcc_cqz) <= 40)
-          metadata.MY_CQ_ZONE = String(data.dxcc_cqz)
-        if (!metadata.MY_DXCC || !metadata.MY_CQ_ZONE) notes.push("Lookup did not resolve all required values; enter them manually.")
+        const data = object(await apiRequest(services.fetch, credentials, `lookup?callsign=${encodeURIComponent(String(payload.callsign))}&detail=full`))
+        const fields = [
+          ["MY_DXCC", data.dxcc_id, 999],
+          ["MY_CQ_ZONE", data.dxcc_cqz, 40],
+          ["MY_ITU_ZONE", data.dxcc_ituz, 90],
+        ] as const
+        if (!metadata.MY_DXCC || Number(metadata.MY_DXCC) === Number(data.dxcc_id)) {
+          for (const [field, value, max] of fields) {
+            if (metadata[field] || (field === "MY_ITU_ZONE" && config.ituFallback)) continue
+            const number = Number(value)
+            if ((typeof value === "number" || typeof value === "string") && Number.isInteger(number) && number >= 1 && number <= max)
+              metadata[field] = String(number)
+          }
+        } else {
+          notes.push("Callsign lookup returned a different DXCC entity. Verify the missing zones for this station.")
+        }
+        if (metadata.MY_ITU_ZONE && !group.metadata?.MY_ITU_ZONE)
+          notes.push("The ITU zone is a callsign-based suggestion. Verify it against the activation location.")
       } catch {
         notes.push("Callsign lookup failed. Enter the metadata manually; no station was created.")
       }
@@ -114,9 +142,7 @@ export async function createLocation(
       throw new WavelogError("Reviewed metadata changes a selected identity field. Correct the source operation or matching settings and preview again.")
   }
   // Re-read both the local snapshot and server list after the user closes forms.
-  const currentOperation = ctx.getOperation ? await ctx.getOperation(String(operation.uuid)) : null
-  if (!currentOperation) throw new WavelogError("Could not re-read the current operation after review. No station was created.")
-  const refreshed = await previewOperation(currentOperation, ctx, services.preview, config)
+  const refreshed = await readPreview(true)
   const target = refreshed.groups.find((item) => JSON.stringify(item.values) === JSON.stringify(group.values))
   if (!target || target.count !== group.count || target.name !== group.name || JSON.stringify(target.metadata) !== JSON.stringify(group.metadata))
     throw new WavelogError("The local preview changed during review. Run the action again before creating anything.")

@@ -9,18 +9,39 @@ The manual workflow has been tested on-device through the human-reviewed
 phases in [PLAN.md](PLAN.md). This release supports API v2 tokens only.
 The existing WaveRover wrapper is unaffected.
 
-The operation dashboard panel is the intended interface for preview, comparison,
-creation and upload, using existing Halo extension APIs without changes to Halo. Optional live upload is a possible later phase, not part
-of this release; the panel can then display connection, queue and error status.
+The dashboard supports preview, station creation and manual upload. On API 28,
+alpha.13 also adds a working native push under the active operation's
+**⋮ → Export Logs → Sync & Push to Services**. Type `EXP PUSH` in the call
+field if the section is hidden on the experimental Halo build.
+
+For an initial native test, choose a fresh operation and an existing
+station-location. Native Push uses the default callsign, grid (six characters),
+SOTA and POTA matching fields. Dashboard match overrides apply only to the
+dashboard flow. If Push finds a missing station, it opens a creation review. After saving,
+tap Push again. Complete the review promptly because Halo limits each push
+hook call to one minute. Use one upload route per operation. Contacts
+previously sent through the dashboard have no Halo transfer history, and an
+already existing contact is reported for review without linking it.
+
+The first native version transfers core QSO fields, power and station
+activation references. It excludes private text and fields that Halo's
+exporter might enrich through callsign lookup. Wavelog's single-contact JSON
+path can trigger server-side forwarding depending on station settings. Use
+a station with forwarding disabled for the first test.
+
+If a write response is lost, native push pauses. Inspect Wavelog and only
+then use **Review paused push…** in the dashboard menu to resume. Native Push
+adds new QSOs and leaves edits and deletes for manual handling.
 
 ## Install and try
 
-The built file is `dist/ad8is-wavelog-0.1.0-alpha.9.h2kext`. Copy it to your
+The built file is `dist/ad8is-wavelog-0.1.0-alpha.13.h2kext`. Copy it to your
 device using your normal file-transfer workflow. In Halo open **Settings →
 Extensions & Features → Install from file…**, choose it, and enable AD8IS
 Wavelog if needed. In an operation view's layout editor, add the **Wavelog**
 panel, or keep the one you placed in Phase 1. Exact layout controls can vary by
-device; this adds a panel rather than a new export or operation-tools command.
+device. Alpha.10 requires Halo extension API 28 and access to `EXP PUSH` to
+exercise the native test row.
 
 Under **Settings → Accounts → Wavelog**, enter your public HTTPS Wavelog base
 URL (including any installation subpath) and `wl2_` API v2 token. Connect/Test
@@ -77,7 +98,7 @@ blank expanded result uses automatic naming: available SOTA refs, POTA refs, the
 grid joined with comma-space. Dates and callsigns are omitted from the automatic
 name but callsign remains part of matching identity. Examples: `W8O/SE-004,
 US-5450, EM89AB`, `US-5450, EM89AB`, or `EM89AB`. Existing panel settings retain
-their saved templates; clear Location name format once to adopt this new default. Callsign lookup is chosen in the creation form; Preview settings also includes
+their saved templates; clear Location name format once to adopt this new default. The creation form looks up missing metadata automatically when permitted. Preview settings also includes
 an optional fallback ITU zone for new stations.
 
 The preview explicitly excludes private notes and lookup-derived data and caps
@@ -115,14 +136,14 @@ does not provide a manual target override.
 ## Create missing station-locations (no QSO import)
 
 Panel menu → **Create missing station-location… (no QSOs)** creates one reviewed
-location at a time. It first regenerates preview/reconciliation. Select a new
-combination and whether to use callsign lookup for missing DXCC/CQ values, then
+location at a time. It first regenerates preview/reconciliation. If several combinations are missing, choose one. Then
 review the proposed name, fixed identity, server and active logbook. Fill the
 required DXCC number, CQ zone and ITU zone. Uniform MY_DXCC/MY_CQ_ZONE/MY_ITU_ZONE
 values from the exported contacts prefill the form; lookup fills missing values
-only. Lookup suggestions require review against the actual operating location,
-especially for entities spanning zones. ITU is never invented by callsign lookup.
-Preview settings has an optional fallback ITU zone for new stations.
+only. For ITU, a configured fallback takes precedence over Wavelog’s full
+callsign lookup, which may provide an entity-level suggestion. Verify the
+zone against the actual activation location, especially in entities spanning
+multiple zones. Enter it manually if the server does not return a suggestion.
 
 Nothing is created unless you submit the final form with its explicit creation
 checkbox checked. Cancellation or an unchecked checkbox makes no writes. Identity
@@ -254,11 +275,9 @@ npm run pack
 sha256sum dist/*.h2kext
 ```
 
-The SDK and tools are pinned to 1.26.0 in package.json and package-lock.json.
-The manifest uses API 23 for the panel menu/event entry point, plus account and
-HTTPS-fetch hooks. The target app's API ceiling is 26. Shared libraries remain
-host-provided, not bundled copies. Future phases
-must raise the manifest API if they use a capability that requires it.
+The SDK and tools are pinned to 1.28.0 in package.json and package-lock.json.
+The native transfer hook requires manifest API 28. Halo supplies the shared
+libraries at runtime.
 
 The official build's activation preflight currently warns that it cannot load
 the host-provided country library from local node_modules. We do not install or

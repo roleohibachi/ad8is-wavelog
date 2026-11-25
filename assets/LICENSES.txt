@@ -667,8 +667,8 @@ Ham2K SDK and scaffold notices:
 
 # Third-party notices
 
-The extension uses @ham2k/extension-sdk 1.26.0 and was scaffolded with
-@ham2k/extension-tools 1.26.0. Both are MIT licensed, copyright Sebastian
+The extension uses @ham2k/extension-sdk 1.28.0 and was scaffolded with
+@ham2k/extension-tools 1.26.0 and now builds with 1.28.0. Both are MIT licensed, copyright Sebastian
 Delmont. SDK code included in the generated bundle remains subject to this
 notice. No WaveRover source is copied or bundled.
 

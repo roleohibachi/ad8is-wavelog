@@ -1,5 +1,44 @@
 # Device acceptance
 
+## Alpha.12 — Native push to existing stations
+
+- API 28 with `EXP PUSH`. Open the active operation’s **⋮ → Export Logs →
+  Sync & Push to Services**. Choose **Push new QSOs to Wavelog**.
+- Verify one fresh QSO on a station with forwarding disabled, including the
+  station ID, frequency, power, time and activation references. Reopen Export
+  Logs and check that Halo has recorded the QSO as sent.
+- Verify that a missing or ambiguous station is reported before contact write,
+  and that creating a missing station through the dashboard resolves it.
+- Mocked bundle tests cover confirmed IDs and a lost response that blocks retry.
+  The native phone and Wavelog checks are pending.
+
+## Alpha.11 — Station creation review and ITU suggestion
+
+- Requires Halo extension API 28. SHA-256: `2d5919d366020adabb9531eb78beca5df95cbeedef18d40166476ecae42c58c1`.
+- Try the dashboard upload on an activation with one missing location. It
+  opens the creation review directly. Confirming creation leads to the separate
+  QSO upload review. Check ITU against the activation before confirming.
+- Existing ADIF metadata and the configured ITU fallback take precedence over
+  callsign lookup. Older servers or entities without an ITU result still need
+  manual input when neither source supplies it.
+- 72 tests, typecheck and packaging passed. Device verification is pending.
+
+## Alpha.10 — Native transfer discovery
+
+- Artifact: `dist/ad8is-wavelog-0.1.0-alpha.10.h2kext`. SDK/tools 1.28.0,
+  manifest API 28. SHA-256: `0462873031a94d8260285bde3233119960ad41d17af1ab389edea7e1bd7e78be`.
+- Automated: 71 tests pass, including discovery and a test push through the
+  built bundle with host calls forbidden. Typecheck and pack pass. The
+  packager still reports the local country-library activation warning.
+- Device check pending. Install over alpha.9 on a PoLo build with API 28 and
+  access to `EXP PUSH`. Record the app build and SHA, then verify the saved
+  Wavelog account remains configured.
+- Open an operation with at least one QSO, expand **Exports → Sync & Push to
+  Services**, and check for **Test Wavelog push**. Trigger it and expect the
+  deliberate “No contacts were sent” error. Verify that the contacts remain
+  due and the operation is not marked processed by this push. The existing
+  dashboard upload is still a separate real upload action.
+
 ## Alpha.9 — Simplified upload panel
 
 - Artifact: `dist/ad8is-wavelog-0.1.0-alpha.9.h2kext`; SDK/tools 1.26.0,
